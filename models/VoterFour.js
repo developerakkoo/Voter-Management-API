@@ -1,0 +1,130 @@
+const mongoose = require('mongoose');
+
+const voterFourSchema = new mongoose.Schema({
+  // Exact column names from 1st.xlsx, 2nd.xlsx, 3rd.xlsx files
+  AC: {
+    type: String,
+    trim: true
+  },
+  'Booth no': {
+    type: String,
+    trim: true
+  },
+  'Sr No': {
+    type: String,
+    trim: true
+  },
+  'Sr no': {
+    type: String,
+    trim: true
+  },
+  'Voter Name': {
+    type: String,
+    trim: true
+  },
+  'Voter Name Eng': {
+    type: String,
+    required: true,
+    index: true,
+    trim: true
+  },
+  'Relative Name': {
+    type: String,
+    trim: true
+  },
+  'Relative Name Eng': {
+    type: String,
+    trim: true
+  },
+  ' Relative Name Eng': {
+    type: String,
+    trim: true
+  },
+  Sex: {
+    type: String,
+    enum: ['Male', 'Female', 'Other']
+  },
+  Age: {
+    type: Number
+  },
+  CardNo: {
+    type: String,
+    unique: true,
+    sparse: true,
+    trim: true
+  },
+  CodeNo: {
+    type: String,
+    trim: true
+  },
+  Address: {
+    type: String,
+    trim: true
+  },
+  Booth: {
+    type: String,
+    trim: true
+  },
+  'Booth Eng': {
+    type: String,
+    trim: true
+  },
+  pno: {
+    type: String,
+    trim: true
+  },
+  
+  // Source file information
+  sourceFile: {
+    type: String,
+    trim: true
+  },
+  
+  // Metadata
+  isActive: {
+    type: Boolean,
+    default: true
+  },
+  isPaid: {
+    type: Boolean,
+    default: false
+  },
+  isVisited: {
+    type: Boolean,
+    default: false
+  },
+  uploadedAt: {
+    type: Date,
+    default: Date.now
+  },
+  lastUpdated: {
+    type: Date,
+    default: Date.now
+  }
+}, {
+  timestamps: true
+});
+
+// Create text index for comprehensive search
+voterFourSchema.index({
+  'Voter Name Eng': 'text',
+  'Voter Name': 'text',
+  'Relative Name Eng': 'text',
+  ' Relative Name Eng': 'text',
+  'Relative Name': 'text',
+  Address: 'text',
+  Booth: 'text',
+  'Booth Eng': 'text'
+});
+
+// Create individual indexes for better performance
+voterFourSchema.index({ 'Voter Name Eng': 1 });
+voterFourSchema.index({ AC: 1 });
+voterFourSchema.index({ 'Booth no': 1 });
+voterFourSchema.index({ CardNo: 1 });
+voterFourSchema.index({ CodeNo: 1 });
+voterFourSchema.index({ sourceFile: 1 });
+voterFourSchema.index({ isPaid: 1 });
+voterFourSchema.index({ isVisited: 1 });
+
+module.exports = mongoose.model('VoterFour', voterFourSchema);
