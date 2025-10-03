@@ -66,6 +66,21 @@ const getAllSurveys = async (req, res) => {
       Survey.countDocuments(filter)
     ]);
 
+    // Manually populate members' voterId
+    for (const survey of surveys) {
+      if (survey.members && survey.members.length > 0) {
+        for (const member of survey.members) {
+          if (member.voterId && member.voterType) {
+            const VoterModel = member.voterType === 'Voter' ? Voter : VoterFour;
+            const voterData = await VoterModel.findById(member.voterId)
+              .select('Voter Name Eng Voter Name pno CardNo')
+              .lean();
+            member.voterId = voterData || member.voterId;
+          }
+        }
+      }
+    }
+
     const totalPages = Math.ceil(totalCount / parseInt(limit));
 
     res.json({
@@ -116,6 +131,19 @@ const getSurveyById = async (req, res) => {
         success: false,
         message: 'Survey not found'
       });
+    }
+
+    // Manually populate members' voterId
+    if (survey.members && survey.members.length > 0) {
+      for (const member of survey.members) {
+        if (member.voterId && member.voterType) {
+          const VoterModel = member.voterType === 'Voter' ? Voter : VoterFour;
+          const voterData = await VoterModel.findById(member.voterId)
+            .select('Voter Name Eng Voter Name pno CardNo Address Sex Age')
+            .lean();
+          member.voterId = voterData || member.voterId;
+        }
+      }
     }
 
     res.json({
@@ -702,6 +730,21 @@ const getSurveysBySurveyor = async (req, res) => {
       Survey.countDocuments(filter)
     ]);
 
+    // Manually populate members' voterId
+    for (const survey of surveys) {
+      if (survey.members && survey.members.length > 0) {
+        for (const member of survey.members) {
+          if (member.voterId && member.voterType) {
+            const VoterModel = member.voterType === 'Voter' ? Voter : VoterFour;
+            const voterData = await VoterModel.findById(member.voterId)
+              .select('Voter Name Eng Voter Name pno CardNo')
+              .lean();
+            member.voterId = voterData || member.voterId;
+          }
+        }
+      }
+    }
+
     const totalPages = Math.ceil(totalCount / parseInt(limit));
 
     res.json({
@@ -773,6 +816,21 @@ const getSurveysByVoter = async (req, res) => {
         .lean(),
       Survey.countDocuments(filter)
     ]);
+
+    // Manually populate members' voterId
+    for (const survey of surveys) {
+      if (survey.members && survey.members.length > 0) {
+        for (const member of survey.members) {
+          if (member.voterId && member.voterType) {
+            const VoterModel = member.voterType === 'Voter' ? Voter : VoterFour;
+            const voterData = await VoterModel.findById(member.voterId)
+              .select('Voter Name Eng Voter Name pno CardNo')
+              .lean();
+            member.voterId = voterData || member.voterId;
+          }
+        }
+      }
+    }
 
     const totalPages = Math.ceil(totalCount / parseInt(limit));
 

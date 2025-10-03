@@ -14,6 +14,7 @@ The Survey API provides comprehensive functionality for managing surveys with vo
 - **Status Management**: Draft, completed, submitted, verified, rejected
 - **Analytics**: Comprehensive statistics and reporting
 - **Search & Filter**: Advanced search and filtering capabilities
+- **Auto-Population**: Main voterId and members' voterId are automatically populated with full voter details
 
 ### 📊 **Survey Status Flow:**
 ```
@@ -83,7 +84,12 @@ GET /api/survey?page=1&limit=20&status=completed&voterType=Voter&sortBy=createdA
           "phoneNumber": "9876543211",
           "relationship": "Spouse",
           "isVoter": true,
-          "voterId": "64a1b2c3d4e5f6789012348",
+          "voterId": {
+            "_id": "64a1b2c3d4e5f6789012348",
+            "CardNo": "TBZ4771515",
+            "pno": "3",
+            "Voter Name Eng": "Jane Doe"
+          },
           "voterType": "Voter"
         }
       ],
@@ -663,6 +669,37 @@ const searchResults = await searchSurveys('9876543210', {
 - The voter's `surveyId` and `lastSurveyDate` are also updated
 - The `completedAt` timestamp is automatically set when survey is created
 - When a survey is deleted, the voter's survey status is reset
+
+### **Automatic Population:**
+- **Main voterId**: Automatically populated with voter details (CardNo, pno, Voter Name Eng, etc.)
+- **Members' voterId**: Each member's voterId is also automatically populated with full voter details
+- **surveyorId**: Populated with surveyor details (fullName, userId, pno)
+- **verifiedBy**: Populated with admin email when applicable
+
+**Populated Fields in Response:**
+```json
+{
+  "voterId": {
+    "_id": "68dd9aa890752b2d27b7ed84",
+    "CardNo": "TBZ4771515",
+    "pno": "3",
+    "Voter Name Eng": "John Doe",
+    "Sex": "Male",
+    "Age": 62
+  },
+  "members": [
+    {
+      "name": "Jane Doe",
+      "voterId": {
+        "_id": "68dd9a8090752b2d27b779d1",
+        "CardNo": "TBZ3900677",
+        "pno": "3",
+        "Voter Name Eng": "Jane Doe"
+      }
+    }
+  ]
+}
+```
 
 ## Data Validation
 
