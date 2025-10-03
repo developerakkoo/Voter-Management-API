@@ -93,6 +93,17 @@ const voterFourSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  surveyDone: {
+    type: Boolean,
+    default: false
+  },
+  surveyId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Survey'
+  },
+  lastSurveyDate: {
+    type: Date
+  },
   uploadedAt: {
     type: Date,
     default: Date.now
@@ -126,5 +137,7 @@ voterFourSchema.index({ CodeNo: 1 });
 voterFourSchema.index({ sourceFile: 1 });
 voterFourSchema.index({ isPaid: 1 });
 voterFourSchema.index({ isVisited: 1 });
+voterFourSchema.index({ surveyDone: 1 });
+voterFourSchema.index({ surveyId: 1 });
 
 module.exports = mongoose.model('VoterFour', voterFourSchema);

@@ -32,9 +32,32 @@ const subAdminSchema = new mongoose.Schema({
     maxlength: 100
   },
   locationImage: {
-    type: String,
-    trim: true,
-    default: null
+    filename: {
+      type: String,
+      trim: true
+    },
+    originalName: {
+      type: String,
+      trim: true
+    },
+    path: {
+      type: String,
+      trim: true
+    },
+    url: {
+      type: String,
+      trim: true
+    },
+    size: {
+      type: Number
+    },
+    mimetype: {
+      type: String,
+      trim: true
+    },
+    uploadedAt: {
+      type: Date
+    }
   },
   assignedVoters: [{
     voterId: {

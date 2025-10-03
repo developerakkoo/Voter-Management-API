@@ -87,6 +87,17 @@ const voterSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  surveyDone: {
+    type: Boolean,
+    default: false
+  },
+  surveyId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Survey'
+  },
+  lastSurveyDate: {
+    type: Date
+  },
   uploadedAt: {
     type: Date,
     default: Date.now
@@ -118,5 +129,7 @@ voterSchema.index({ Part: 1 });
 voterSchema.index({ CardNo: 1 });
 voterSchema.index({ isPaid: 1 });
 voterSchema.index({ isVisited: 1 });
+voterSchema.index({ surveyDone: 1 });
+voterSchema.index({ surveyId: 1 });
 
 module.exports = mongoose.model('Voter', voterSchema);

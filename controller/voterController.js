@@ -1,6 +1,6 @@
 const Voter = require('../models/Voter');
 
-// GET /api/voter - Get all voters with pagination and filtering
+// GET /api/voter - Get all voters with pagination, filtering, and search
 const getAllVoters = async (req, res) => {
   try {
     const { 
@@ -9,6 +9,8 @@ const getAllVoters = async (req, res) => {
       isPaid, 
       isVisited, 
       isActive,
+      search,
+      nameOnly,
       sortBy = 'Voter Name Eng',
       sortOrder = 'asc'
     } = req.query;
@@ -20,6 +22,29 @@ const getAllVoters = async (req, res) => {
     if (isPaid !== undefined) filter.isPaid = isPaid === 'true';
     if (isVisited !== undefined) filter.isVisited = isVisited === 'true';
     if (isActive !== undefined) filter.isActive = isActive === 'true';
+    
+    // Add search functionality
+    if (search) {
+      if (nameOnly === 'true') {
+        // Search only in name fields
+        filter.$or = [
+          { 'Voter Name Eng': { $regex: search, $options: 'i' } },
+          { 'Voter Name': { $regex: search, $options: 'i' } },
+          { 'Relative Name Eng': { $regex: search, $options: 'i' } },
+          { 'Relative Name': { $regex: search, $options: 'i' } }
+        ];
+      } else {
+        // Search in all fields
+        filter.$or = [
+          { 'Voter Name Eng': { $regex: search, $options: 'i' } },
+          { 'Voter Name': { $regex: search, $options: 'i' } },
+          { 'Relative Name Eng': { $regex: search, $options: 'i' } },
+          { 'Relative Name': { $regex: search, $options: 'i' } },
+          { 'Address': { $regex: search, $options: 'i' } },
+          { 'Address Eng': { $regex: search, $options: 'i' } }
+        ];
+      }
+    }
     
     // Sort options
     const sortOptions = {};
@@ -46,6 +71,15 @@ const getAllVoters = async (req, res) => {
         hasNextPage: page < totalPages,
         hasPrevPage: page > 1,
         limit: parseInt(limit)
+      },
+      filters: {
+        isPaid,
+        isVisited,
+        isActive,
+        search,
+        nameOnly,
+        sortBy,
+        sortOrder
       }
     });
   } catch (error) {
@@ -386,6 +420,189 @@ const getVoterStats = async (req, res) => {
   }
 };
 
+// GET /api/voter/search - Search voters by Voter Name Eng
+const searchVoters = async (req, res) => {
+  try {
+    const {
+      q,
+      isPaid,
+      isVisited,
+      isActive,
+      nameOnly,
+      page = 1,
+      limit = 20,
+      sortBy = 'Voter Name Eng',
+      sortOrder = 'asc'
+    } = req.query;
+
+    if (!q) {
+      return res.status(400).json({
+        success: false,
+        message: 'Search query (q) is required'
+      });
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Build search filter
+    let searchFilter = {};
+    
+    if (nameOnly === 'true') {
+      // Search only in name fields
+      searchFilter.$or = [
+        { 'Voter Name Eng': { $regex: q, $options: 'i' } },
+        { 'Voter Name': { $regex: q, $options: 'i' } },
+        { 'Relative Name Eng': { $regex: q, $options: 'i' } },
+        { 'Relative Name': { $regex: q, $options: 'i' } }
+      ];
+    } else {
+      // Search in all fields
+      searchFilter.$or = [
+        { 'Voter Name Eng': { $regex: q, $options: 'i' } },
+        { 'Voter Name': { $regex: q, $options: 'i' } },
+        { 'Relative Name Eng': { $regex: q, $options: 'i' } },
+        { 'Relative Name': { $regex: q, $options: 'i' } },
+        { 'Address': { $regex: q, $options: 'i' } },
+        { 'Address Eng': { $regex: q, $options: 'i' } }
+      ];
+    }
+
+    // Add additional filters
+    if (isPaid !== undefined) searchFilter.isPaid = isPaid === 'true';
+    if (isVisited !== undefined) searchFilter.isVisited = isVisited === 'true';
+    if (isActive !== undefined) searchFilter.isActive = isActive === 'true';
+
+    // Build sort object
+    const sortOptions = {};
+    sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
+
+    // Search voters
+    const voters = await Voter.find(searchFilter)
+      .sort(sortOptions)
+      .skip(skip)
+      .limit(parseInt(limit))
+      .lean();
+
+    // Get total count
+    const totalCount = await Voter.countDocuments(searchFilter);
+    const totalPages = Math.ceil(totalCount / parseInt(limit));
+
+    res.json({
+      success: true,
+      data: voters,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages,
+        totalCount,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+        limit: parseInt(limit)
+      },
+      searchCriteria: {
+        query: q,
+        isPaid,
+        isVisited,
+        isActive,
+        nameOnly,
+        sortBy,
+        sortOrder
+      }
+    });
+  } catch (error) {
+    console.error('Search voters error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error searching voters',
+      error: error.message
+    });
+  }
+};
+
+// GET /api/voter/search/all - Get all voters matching search criteria (no pagination)
+const searchAllVoters = async (req, res) => {
+  try {
+    const {
+      q,
+      isPaid,
+      isVisited,
+      isActive,
+      nameOnly,
+      sortBy = 'Voter Name Eng',
+      sortOrder = 'asc'
+    } = req.query;
+
+    if (!q) {
+      return res.status(400).json({
+        success: false,
+        message: 'Search query (q) is required'
+      });
+    }
+
+    // Build search filter
+    let searchFilter = {};
+    
+    if (nameOnly === 'true') {
+      // Search only in name fields
+      searchFilter.$or = [
+        { 'Voter Name Eng': { $regex: q, $options: 'i' } },
+        { 'Voter Name': { $regex: q, $options: 'i' } },
+        { 'Relative Name Eng': { $regex: q, $options: 'i' } },
+        { 'Relative Name': { $regex: q, $options: 'i' } }
+      ];
+    } else {
+      // Search in all fields
+      searchFilter.$or = [
+        { 'Voter Name Eng': { $regex: q, $options: 'i' } },
+        { 'Voter Name': { $regex: q, $options: 'i' } },
+        { 'Relative Name Eng': { $regex: q, $options: 'i' } },
+        { 'Relative Name': { $regex: q, $options: 'i' } },
+        { 'Address': { $regex: q, $options: 'i' } },
+        { 'Address Eng': { $regex: q, $options: 'i' } }
+      ];
+    }
+
+    // Add additional filters
+    if (isPaid !== undefined) searchFilter.isPaid = isPaid === 'true';
+    if (isVisited !== undefined) searchFilter.isVisited = isVisited === 'true';
+    if (isActive !== undefined) searchFilter.isActive = isActive === 'true';
+
+    // Build sort object
+    const sortOptions = {};
+    sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
+
+    // Get all matching voters (no pagination)
+    const voters = await Voter.find(searchFilter)
+      .sort(sortOptions)
+      .lean();
+
+    // Get total count
+    const totalCount = await Voter.countDocuments(searchFilter);
+
+    res.json({
+      success: true,
+      data: voters,
+      totalCount,
+      searchCriteria: {
+        query: q,
+        isPaid,
+        isVisited,
+        isActive,
+        nameOnly,
+        sortBy,
+        sortOrder
+      },
+      warning: totalCount > 10000 ? `Large result set: ${totalCount} records. Consider using pagination for better performance.` : undefined
+    });
+  } catch (error) {
+    console.error('Search all voters error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error searching all voters',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getAllVoters,
   getVoterById,
@@ -395,5 +612,7 @@ module.exports = {
   updatePaidStatus,
   updateVisitedStatus,
   updateStatus,
-  getVoterStats
+  getVoterStats,
+  searchVoters,
+  searchAllVoters
 };

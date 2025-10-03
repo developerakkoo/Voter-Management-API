@@ -9,11 +9,19 @@ const {
   updatePaidStatus,
   updateVisitedStatus,
   updateStatus,
-  getVoterStats
+  getVoterStats,
+  searchVoters,
+  searchAllVoters
 } = require('../controller/voterController');
 
 // GET /api/voter/stats - Get statistics for isPaid and isVisited
 router.get('/stats', getVoterStats);
+
+// GET /api/voter/search - Search voters by Voter Name Eng (paginated)
+router.get('/search', searchVoters);
+
+// GET /api/voter/search/all - Search all voters matching criteria (no pagination)
+router.get('/search/all', searchAllVoters);
 
 // GET /api/voter - Get all voters with pagination and filtering
 router.get('/', getAllVoters);

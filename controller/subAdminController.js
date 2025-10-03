@@ -3,6 +3,45 @@ const VoterAssignment = require('../models/VoterAssignment');
 const Voter = require('../models/Voter');
 const VoterFour = require('../models/VoterFour');
 const jwt = require('jsonwebtoken');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
+// Configure multer for location image upload
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = './uploads/subadmin/location-images';
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'subadmin-location-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /jpeg|jpg|png|gif|webp/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+    
+    if (mimetype && extname) {
+      return cb(null, true);
+    } else {
+      cb(new Error('Only image files (JPEG, JPG, PNG, GIF, WebP) are allowed!'), false);
+    }
+  },
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  }
+});
+
+// Middleware for handling single image upload
+const uploadLocationImage = upload.single('locationImage');
 
 // GET /api/subadmin - Get all sub admins with pagination and filtering
 const getAllSubAdmins = async (req, res) => {
@@ -110,43 +149,72 @@ const getSubAdminById = async (req, res) => {
   }
 };
 
-// POST /api/subadmin - Create new sub admin
+// POST /api/subadmin - Create new sub admin with image upload
 const createSubAdmin = async (req, res) => {
   try {
-    const { fullName, userId, password, locationName, locationImage } = req.body;
-    
-    // Validate required fields
-    if (!fullName || !userId || !password || !locationName) {
-      return res.status(400).json({
-        success: false,
-        message: 'Full name, user ID, password, and location name are required'
+    // Handle image upload
+    uploadLocationImage(req, res, async (err) => {
+      if (err) {
+        return res.status(400).json({
+          success: false,
+          message: 'Image upload error',
+          error: err.message
+        });
+      }
+      
+      const { fullName, userId, password, locationName } = req.body;
+      
+      // Validate required fields
+      if (!fullName || !userId || !password || !locationName) {
+        return res.status(400).json({
+          success: false,
+          message: 'Full name, user ID, password, and location name are required'
+        });
+      }
+      
+      // Check if sub admin already exists
+      const existingSubAdmin = await SubAdmin.findOne({ userId: userId.toLowerCase() });
+      if (existingSubAdmin) {
+        return res.status(409).json({
+          success: false,
+          message: 'Sub admin with this user ID already exists'
+        });
+      }
+      
+      // Prepare location image data
+      let locationImageData = null;
+      if (req.file) {
+        // Construct the hosted image URL
+        const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+        const imageUrl = `${baseUrl}/uploads/subadmin/location-images/${req.file.filename}`;
+        
+        locationImageData = {
+          filename: req.file.filename,
+          originalName: req.file.originalname,
+          path: req.file.path,
+          url: imageUrl,
+          size: req.file.size,
+          mimetype: req.file.mimetype,
+          uploadedAt: new Date()
+        };
+      }
+      
+      // Create new sub admin
+      const subAdmin = new SubAdmin({
+        fullName,
+        userId: userId.toLowerCase(),
+        password,
+        locationName,
+        locationImage: locationImageData
       });
-    }
-    
-    // Check if sub admin already exists
-    const existingSubAdmin = await SubAdmin.findOne({ userId: userId.toLowerCase() });
-    if (existingSubAdmin) {
-      return res.status(409).json({
-        success: false,
-        message: 'Sub admin with this user ID already exists'
+      
+      await subAdmin.save();
+      
+      res.status(201).json({
+        success: true,
+        message: 'Sub admin created successfully',
+        data: subAdmin.getPublicProfile()
       });
-    }
-    
-    // Create new sub admin
-    const subAdmin = new SubAdmin({
-      fullName,
-      userId: userId.toLowerCase(),
-      password,
-      locationName,
-      locationImage: locationImage || null
-    });
-    
-    await subAdmin.save();
-    
-    res.status(201).json({
-      success: true,
-      message: 'Sub admin created successfully',
-      data: subAdmin.getPublicProfile()
     });
   } catch (error) {
     console.error('Create sub admin error:', error);
@@ -167,54 +235,86 @@ const createSubAdmin = async (req, res) => {
   }
 };
 
-// PUT /api/subadmin/:id - Update sub admin
+// PUT /api/subadmin/:id - Update sub admin with image upload
 const updateSubAdmin = async (req, res) => {
   try {
-    const { fullName, userId, password, locationName, locationImage, isActive } = req.body;
-    const subAdminId = req.params.id;
-    
-    // Check if sub admin exists
-    const subAdmin = await SubAdmin.findById(subAdminId);
-    if (!subAdmin) {
-      return res.status(404).json({
-        success: false,
-        message: 'Sub admin not found'
-      });
-    }
-    
-    // Check if userId is being changed and if it already exists
-    if (userId && userId.toLowerCase() !== subAdmin.userId) {
-      const existingSubAdmin = await SubAdmin.findOne({ 
-        userId: userId.toLowerCase(),
-        _id: { $ne: subAdminId }
-      });
-      if (existingSubAdmin) {
-        return res.status(409).json({
+    // Handle image upload
+    uploadLocationImage(req, res, async (err) => {
+      if (err) {
+        return res.status(400).json({
           success: false,
-          message: 'Sub admin with this user ID already exists'
+          message: 'Image upload error',
+          error: err.message
         });
       }
-    }
-    
-    // Update fields
-    const updateData = {};
-    if (fullName) updateData.fullName = fullName;
-    if (userId) updateData.userId = userId.toLowerCase();
-    if (password) updateData.password = password;
-    if (locationName) updateData.locationName = locationName;
-    if (locationImage !== undefined) updateData.locationImage = locationImage;
-    if (isActive !== undefined) updateData.isActive = isActive;
-    
-    const updatedSubAdmin = await SubAdmin.findByIdAndUpdate(
-      subAdminId,
-      updateData,
-      { new: true, runValidators: true }
-    );
-    
-    res.json({
-      success: true,
-      message: 'Sub admin updated successfully',
-      data: updatedSubAdmin.getPublicProfile()
+      
+      const { fullName, userId, password, locationName, isActive } = req.body;
+      const subAdminId = req.params.id;
+      
+      // Check if sub admin exists
+      const subAdmin = await SubAdmin.findById(subAdminId);
+      if (!subAdmin) {
+        return res.status(404).json({
+          success: false,
+          message: 'Sub admin not found'
+        });
+      }
+      
+      // Check if userId is being changed and if it already exists
+      if (userId && userId.toLowerCase() !== subAdmin.userId) {
+        const existingSubAdmin = await SubAdmin.findOne({ 
+          userId: userId.toLowerCase(),
+          _id: { $ne: subAdminId }
+        });
+        if (existingSubAdmin) {
+          return res.status(409).json({
+            success: false,
+            message: 'Sub admin with this user ID already exists'
+          });
+        }
+      }
+      
+      // Update fields
+      const updateData = {};
+      if (fullName) updateData.fullName = fullName;
+      if (userId) updateData.userId = userId.toLowerCase();
+      if (password) updateData.password = password;
+      if (locationName) updateData.locationName = locationName;
+      if (isActive !== undefined) updateData.isActive = isActive;
+      
+      // Handle location image update
+      if (req.file) {
+        // Delete old image if exists
+        if (subAdmin.locationImage && subAdmin.locationImage.path && fs.existsSync(subAdmin.locationImage.path)) {
+          fs.unlinkSync(subAdmin.locationImage.path);
+        }
+        
+        // Construct the hosted image URL
+        const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+        const imageUrl = `${baseUrl}/uploads/subadmin/location-images/${req.file.filename}`;
+        
+        updateData.locationImage = {
+          filename: req.file.filename,
+          originalName: req.file.originalname,
+          path: req.file.path,
+          url: imageUrl,
+          size: req.file.size,
+          mimetype: req.file.mimetype,
+          uploadedAt: new Date()
+        };
+      }
+      
+      const updatedSubAdmin = await SubAdmin.findByIdAndUpdate(
+        subAdminId,
+        updateData,
+        { new: true, runValidators: true }
+      );
+      
+      res.json({
+        success: true,
+        message: 'Sub admin updated successfully',
+        data: updatedSubAdmin.getPublicProfile()
+      });
     });
   } catch (error) {
     console.error('Update sub admin error:', error);
@@ -248,6 +348,11 @@ const deleteSubAdmin = async (req, res) => {
       });
     }
     
+    // Delete location image if exists
+    if (subAdmin.locationImage && subAdmin.locationImage.path && fs.existsSync(subAdmin.locationImage.path)) {
+      fs.unlinkSync(subAdmin.locationImage.path);
+    }
+    
     // Deactivate all voter assignments for this sub admin
     await VoterAssignment.updateMany(
       { subAdminId },
@@ -273,6 +378,16 @@ const deleteSubAdmin = async (req, res) => {
 // DELETE /api/subadmin - Delete all sub admins (for testing/reset)
 const deleteAllSubAdmins = async (req, res) => {
   try {
+    // Get all sub admins to delete their images
+    const subAdmins = await SubAdmin.find({});
+    
+    // Delete all location images
+    for (const subAdmin of subAdmins) {
+      if (subAdmin.locationImage && subAdmin.locationImage.path && fs.existsSync(subAdmin.locationImage.path)) {
+        fs.unlinkSync(subAdmin.locationImage.path);
+      }
+    }
+    
     // Deactivate all voter assignments
     await VoterAssignment.updateMany({}, { isActive: false });
     

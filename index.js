@@ -19,6 +19,9 @@ const voterAssignmentRoutes = require('./routes/voterAssignmentRoutes');
 const subAdminVoterRoutes = require('./routes/subAdminVoterRoutes');
 const alertRoutes = require('./routes/alertRoutes');
 const categoryRoutes = require('./routes/categoryRoutes');
+const combinedVotersRoutes = require('./routes/combinedVotersRoutes');
+const userRoutes = require('./routes/userRoutes');
+const surveyRoutes = require('./routes/surveyRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -27,6 +30,9 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Serve static files for uploaded images
+app.use('/uploads', express.static('uploads'));
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -93,6 +99,13 @@ app.use('/api/alert', alertRoutes);
 
 // Category routes
 app.use('/api/category', categoryRoutes);
+
+// Combined Voters routes
+app.use('/api/voters', combinedVotersRoutes);
+
+// User routes
+app.use('/api/user', userRoutes);
+app.use('/api/survey', surveyRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -748,7 +761,10 @@ app.listen(PORT, () => {
   console.log(`  PUT http://localhost:${PORT}/api/admin/:id - Update admin`);
   console.log(`  DELETE http://localhost:${PORT}/api/admin/:id - Delete admin`);
   console.log(`Voter endpoints:`);
-  console.log(`  GET http://localhost:${PORT}/api/voter - Get all voters`);
+  console.log(`  GET http://localhost:${PORT}/api/voter - Get all voters with pagination, filtering, and search`);
+  console.log(`  GET http://localhost:${PORT}/api/voter/search - Search voters by Voter Name Eng (paginated)`);
+  console.log(`  GET http://localhost:${PORT}/api/voter/search/all - Search all voters matching criteria (no pagination)`);
+  console.log(`  GET http://localhost:${PORT}/api/voter/stats - Get voter statistics`);
   console.log(`  GET http://localhost:${PORT}/api/voter/:id - Get voter by ID`);
   console.log(`  PUT http://localhost:${PORT}/api/voter/:id - Update voter`);
   console.log(`  DELETE http://localhost:${PORT}/api/voter/:id - Delete voter`);
@@ -756,9 +772,10 @@ app.listen(PORT, () => {
   console.log(`  PATCH http://localhost:${PORT}/api/voter/:id/paid - Update isPaid status`);
   console.log(`  PATCH http://localhost:${PORT}/api/voter/:id/visited - Update isVisited status`);
   console.log(`  PATCH http://localhost:${PORT}/api/voter/:id/status - Update both statuses`);
-  console.log(`  GET http://localhost:${PORT}/api/voter/stats - Get voter statistics`);
   console.log(`VoterFour endpoints:`);
-  console.log(`  GET http://localhost:${PORT}/api/voterfour - Get all VoterFour records`);
+  console.log(`  GET http://localhost:${PORT}/api/voterfour - Get all VoterFour records with pagination, filtering, and search`);
+  console.log(`  GET http://localhost:${PORT}/api/voterfour/search - Search VoterFour by Voter Name Eng`);
+  console.log(`  GET http://localhost:${PORT}/api/voterfour/stats - Get VoterFour statistics`);
   console.log(`  GET http://localhost:${PORT}/api/voterfour/:id - Get VoterFour by ID`);
   console.log(`  PUT http://localhost:${PORT}/api/voterfour/:id - Update VoterFour`);
   console.log(`  DELETE http://localhost:${PORT}/api/voterfour/:id - Delete VoterFour`);
@@ -766,7 +783,6 @@ app.listen(PORT, () => {
   console.log(`  PATCH http://localhost:${PORT}/api/voterfour/:id/paid - Update isPaid status`);
   console.log(`  PATCH http://localhost:${PORT}/api/voterfour/:id/visited - Update isVisited status`);
   console.log(`  PATCH http://localhost:${PORT}/api/voterfour/:id/status - Update both statuses`);
-  console.log(`  GET http://localhost:${PORT}/api/voterfour/stats - Get VoterFour statistics`);
   console.log(`Sub Admin endpoints:`);
   console.log(`  POST http://localhost:${PORT}/api/subadmin/login - Sub admin login`);
   console.log(`  GET http://localhost:${PORT}/api/subadmin - Get all sub admins`);
@@ -820,6 +836,35 @@ app.listen(PORT, () => {
   console.log(`  PUT http://localhost:${PORT}/api/category/:id/data/:entryId - Update data entry (Admin/SubAdmin)`);
   console.log(`  DELETE http://localhost:${PORT}/api/category/:id/data/:entryId - Delete data entry (Admin/SubAdmin)`);
   console.log(`  PATCH http://localhost:${PORT}/api/category/:id/data/reorder - Reorder data entries (Admin/SubAdmin)`);
+  console.log(`Combined Voters endpoints:`);
+  console.log(`  GET http://localhost:${PORT}/api/voters/all - Get all voters from both Voter and VoterFour collections`);
+  console.log(`  GET http://localhost:${PORT}/api/voters/all/stats - Get combined statistics for all voters`);
+  console.log(`  GET http://localhost:${PORT}/api/voters/all/search - Search across both collections`);
+  console.log(`  GET http://localhost:${PORT}/api/voters/all/stream - Stream voters for very large datasets (cursor-based pagination)`);
+  console.log(`User endpoints:`);
+  console.log(`  GET http://localhost:${PORT}/api/user - Get all users with pagination, search, sort, and filter`);
+  console.log(`  GET http://localhost:${PORT}/api/user/stats - Get user statistics`);
+  console.log(`  GET http://localhost:${PORT}/api/user/search - Search users`);
+  console.log(`  GET http://localhost:${PORT}/api/user/pno/:pno - Get users by PNO (3 or 4)`);
+  console.log(`  GET http://localhost:${PORT}/api/user/:id - Get user by ID`);
+  console.log(`  POST http://localhost:${PORT}/api/user - Create new user`);
+  console.log(`  POST http://localhost:${PORT}/api/user/login - User login with userId and password`);
+  console.log(`  PUT http://localhost:${PORT}/api/user/:id - Update user`);
+  console.log(`  DELETE http://localhost:${PORT}/api/user/:id - Delete user`);
+  console.log(`  DELETE http://localhost:${PORT}/api/user - Delete all users`);
+  console.log(`Survey endpoints:`);
+  console.log(`  GET http://localhost:${PORT}/api/survey - Get all surveys with pagination, filtering, and search`);
+  console.log(`  GET http://localhost:${PORT}/api/survey/stats - Get survey statistics`);
+  console.log(`  GET http://localhost:${PORT}/api/survey/available-voters - Get available voters for testing`);
+  console.log(`  GET http://localhost:${PORT}/api/survey/search - Search surveys`);
+  console.log(`  GET http://localhost:${PORT}/api/survey/surveyor/:surveyorId - Get surveys by surveyor`);
+  console.log(`  GET http://localhost:${PORT}/api/survey/voter/:voterId/:voterType - Get surveys by voter`);
+  console.log(`  GET http://localhost:${PORT}/api/survey/:id - Get survey by ID`);
+  console.log(`  POST http://localhost:${PORT}/api/survey - Create new survey`);
+  console.log(`  PUT http://localhost:${PORT}/api/survey/:id - Update survey`);
+  console.log(`  PATCH http://localhost:${PORT}/api/survey/:id/status - Update survey status`);
+  console.log(`  DELETE http://localhost:${PORT}/api/survey/:id - Delete survey`);
+  console.log(`  DELETE http://localhost:${PORT}/api/survey - Delete all surveys`);
 });
 
 module.exports = app;

@@ -11,7 +11,7 @@ const {
   getAssignedVoters,
   getSubAdminStats
 } = require('../controller/subAdminController');
-const { authenticateToken } = require('../middleware/auth');
+// const { authenticateToken } = require('../middleware/auth');
 
 // POST /api/subadmin/login - Sub admin login
 router.post('/login', loginSubAdmin);
