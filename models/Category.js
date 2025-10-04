@@ -22,16 +22,6 @@ const dataEntrySchema = new mongoose.Schema({
   isActive: {
     type: Boolean,
     default: true
-  },
-  
-  createdBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Admin',
-    required: true
-  },
-  lastUpdatedBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Admin'
   }
 }, {
   timestamps: true
@@ -57,15 +47,8 @@ const categorySchema = new mongoose.Schema({
     default: true
   },
   
-  createdBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Admin',
-    required: true
-  },
-  lastUpdatedBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Admin'
-  }
+
+ 
 }, {
   timestamps: true
 });
@@ -74,7 +57,6 @@ const categorySchema = new mongoose.Schema({
 categorySchema.index({ name: 1 });
 categorySchema.index({ isActive: 1 });
 
-categorySchema.index({ createdBy: 1 });
 categorySchema.index({ 'dataEntries.isActive': 1 });
 categorySchema.index({ 'dataEntries.createdAt': -1 });
 
@@ -102,7 +84,6 @@ categorySchema.methods.updateDataEntry = function(entryId, updateData) {
   }
   
   Object.assign(entry, updateData);
-  entry.lastUpdatedBy = updateData.lastUpdatedBy;
   return this.save();
 };
 

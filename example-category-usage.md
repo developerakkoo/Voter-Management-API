@@ -1,7 +1,7 @@
 # Category Management API
 
 ## Overview
-The Category Management API allows you to create, manage, and organize categories with their associated data entries. Each category can contain multiple data entries, and you can perform full CRUD operations on both categories and their data entries.
+The Category Management API allows you to create, manage, and organize categories with their associated data entries. Each category can contain multiple data entries, and you can perform full CRUD operations on both categories and their data entries. All endpoints are publicly accessible without authentication as they are managed by admin only.
 
 
 ## Data Model
@@ -14,8 +14,6 @@ The Category Management API allows you to create, manage, and organize categorie
   description: String (max: 500),
   dataEntries: [DataEntrySchema],
   isActive: Boolean (default: true),
-  createdBy: ObjectId (ref: 'Admin'),
-  lastUpdatedBy: ObjectId (ref: 'Admin'),
   createdAt: Date,
   updatedAt: Date
 }
@@ -29,8 +27,6 @@ The Category Management API allows you to create, manage, and organize categorie
   description: String (required, max: 1000),
   info: String (max: 2000),
   isActive: Boolean (default: true),
-  createdBy: ObjectId (ref: 'Admin'),
-  lastUpdatedBy: ObjectId (ref: 'Admin'),
   createdAt: Date,
   updatedAt: Date
 }
@@ -65,14 +61,6 @@ GET /api/category?page=1&limit=20&isActive=true&search=term&sortBy=name&sortOrde
       "name": "Technology",
       "description": "Technology related information",
       "isActive": true,
-      "createdBy": {
-        "_id": "64f8a1b2c3d4e5f6a7b8c9d1",
-        "email": "admin@example.com"
-      },
-      "lastUpdatedBy": {
-        "_id": "64f8a1b2c3d4e5f6a7b8c9d1",
-        "email": "admin@example.com"
-      },
       "createdAt": "2024-01-15T10:30:00.000Z",
       "updatedAt": "2024-01-15T10:30:00.000Z"
     }
@@ -111,19 +99,11 @@ GET /api/category/64f8a1b2c3d4e5f6a7b8c9d0
         "description": "Programming language for web development",
         "info": "JavaScript is a versatile programming language...",
         "isActive": true,
-        "createdBy": {
-          "_id": "64f8a1b2c3d4e5f6a7b8c9d1",
-          "email": "admin@example.com"
-        },
         "createdAt": "2024-01-15T10:30:00.000Z",
         "updatedAt": "2024-01-15T10:30:00.000Z"
       }
     ],
     "isActive": true,
-    "createdBy": {
-      "_id": "64f8a1b2c3d4e5f6a7b8c9d1",
-      "email": "admin@example.com"
-    },
     "createdAt": "2024-01-15T10:30:00.000Z",
     "updatedAt": "2024-01-15T10:30:00.000Z"
   }
@@ -159,7 +139,6 @@ Content-Type: application/json
     "description": "Technology related information",
     "dataEntries": [],
     "isActive": true,
-    "createdBy": "64f8a1b2c3d4e5f6a7b8c9d1",
     "createdAt": "2024-01-15T10:30:00.000Z",
     "updatedAt": "2024-01-15T10:30:00.000Z"
   }
@@ -191,7 +170,6 @@ Content-Type: application/json
     "name": "Advanced Technology",
     "description": "Advanced technology concepts and information",
     "isActive": true,
-    "lastUpdatedBy": "64f8a1b2c3d4e5f6a7b8c9d1",
     "updatedAt": "2024-01-15T11:30:00.000Z"
   }
 }
@@ -249,7 +227,6 @@ Content-Type: application/json
         "description": "JavaScript library for building user interfaces",
         "info": "React is a declarative, efficient, and flexible JavaScript library...",
         "isActive": true,
-        "createdBy": "64f8a1b2c3d4e5f6a7b8c9d1",
         "createdAt": "2024-01-15T12:30:00.000Z",
         "updatedAt": "2024-01-15T12:30:00.000Z"
       }
@@ -289,7 +266,6 @@ Content-Type: application/json
         "description": "Modern JavaScript library for building user interfaces",
         "info": "React is a declarative, efficient, and flexible JavaScript library...",
         "isActive": true,
-        "lastUpdatedBy": "64f8a1b2c3d4e5f6a7b8c9d1",
         "updatedAt": "2024-01-15T13:30:00.000Z"
       }
     ]
@@ -392,8 +368,8 @@ Content-Type: application/json
 }
 ```
 
-### 11. Get Active Categories (Public)
-Get all active categories with data entries (no authentication required).
+### 11. Get Active Categories
+Get all active categories with data entries.
 
 ```bash
 GET /api/category/active
@@ -410,18 +386,14 @@ GET /api/category/active
       "description": "Technology related information",
       "dataEntries": [
         // Active data entries only
-      ],
-      "createdBy": {
-        "_id": "64f8a1b2c3d4e5f6a7b8c9d1",
-        "email": "admin@example.com"
-      }
+      ]
     }
   ]
 }
 ```
 
-### 12. Search Categories (Public)
-Search categories and data entries (no authentication required).
+### 12. Search Categories
+Search categories and data entries.
 
 ```bash
 GET /api/category/search?q=javascript
@@ -448,7 +420,7 @@ GET /api/category/search?q=javascript
 }
 ```
 
-### 13. Get Category Statistics (Public)
+### 13. Get Category Statistics
 Get comprehensive statistics about categories and data entries.
 
 ```bash
@@ -468,7 +440,7 @@ GET /api/category/stats
 }
 ```
 
-### 14. Delete All Categories (Admin Only)
+### 14. Delete All Categories
 Delete all categories and their data entries (for testing/reset purposes).
 
 ```bash
@@ -588,13 +560,13 @@ curl -X DELETE http://localhost:3000/api/category/{category_id}/data/{entry_id} 
 
 ### Example 4: Public Endpoints
 ```bash
-# Get active categories (no auth required)
+# Get active categories
 curl -X GET http://localhost:3000/api/category/active
 
-# Search categories (no auth required)
+# Search categories
 curl -X GET "http://localhost:3000/api/category/search?q=javascript"
 
-# Get statistics (no auth required)
+# Get statistics
 curl -X GET http://localhost:3000/api/category/stats
 ```
 
@@ -620,14 +592,13 @@ curl -X GET http://localhost:3000/api/category/stats
 3. **Sorting** - Sort by various fields in ascending/descending order
 4. **Pagination** - Handle large datasets efficiently
 5. **Statistics** - Get overview of categories and data entries
-6. **Public Access** - Some endpoints available without authentication
+6. **Public Access** - All endpoints available without authentication
 
 ### ✅ **Data Integrity**
 1. **Automatic Cleanup** - Deleting a category removes all its data entries
 2. **Validation** - Proper validation for all input fields
 3. **Unique Constraints** - Category names must be unique
-4. **Audit Trail** - Track who created and last updated records
-5. **Soft Delete** - Data entries can be deactivated instead of deleted
+4. **Soft Delete** - Data entries can be deactivated instead of deleted
 
 ## Best Practices
 

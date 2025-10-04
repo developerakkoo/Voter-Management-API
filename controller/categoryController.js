@@ -36,8 +36,6 @@ const getAllCategories = async (req, res) => {
     
     const [categories, totalCount] = await Promise.all([
       Category.find(filter, projection)
-        .populate('createdBy', 'email')
-        .populate('lastUpdatedBy', 'email')
         .sort(sortOptions)
         .skip(skip)
         .limit(parseInt(limit))
@@ -72,11 +70,7 @@ const getAllCategories = async (req, res) => {
 // GET /api/category/:id - Get category by ID
 const getCategoryById = async (req, res) => {
   try {
-    const category = await Category.findById(req.params.id)
-      .populate('createdBy', 'email')
-      .populate('lastUpdatedBy', 'email')
-      .populate('dataEntries.createdBy', 'email')
-      .populate('dataEntries.lastUpdatedBy', 'email');
+    const category = await Category.findById(req.params.id);
     
     if (!category) {
       return res.status(404).json({
@@ -119,7 +113,7 @@ const createCategory = async (req, res) => {
     const category = new Category({
       name,
       description,
-      createdBy: req.adminId || req.subAdminId
+     
     });
     
     await category.save();
@@ -171,14 +165,12 @@ const updateCategory = async (req, res) => {
     }
     
     
-    // Add lastUpdatedBy
-    updateData.lastUpdatedBy = req.adminId || req.subAdminId;
-    
+
     const updatedCategory = await Category.findByIdAndUpdate(
       categoryId,
       updateData,
       { new: true, runValidators: true }
-    ).populate('createdBy', 'email').populate('lastUpdatedBy', 'email');
+    );
     
     res.json({
       success: true,
@@ -288,16 +280,13 @@ const addDataEntry = async (req, res) => {
     const dataEntry = {
       title,
       description,
-      info,
-      createdBy: req.adminId || req.subAdminId
+      info
     };
     
     await category.addDataEntry(dataEntry);
     
     // Fetch updated category
-    const updatedCategory = await Category.findById(categoryId)
-      .populate('dataEntries.createdBy', 'email')
-      .populate('dataEntries.lastUpdatedBy', 'email');
+    const updatedCategory = await Category.findById(categoryId);
     
     res.status(201).json({
       success: true,
@@ -337,15 +326,11 @@ const updateDataEntry = async (req, res) => {
       });
     }
     
-    // Add lastUpdatedBy
-    updateData.lastUpdatedBy = req.adminId || req.subAdminId;
     
     await category.updateDataEntry(entryId, updateData);
     
     // Fetch updated category
-    const updatedCategory = await Category.findById(categoryId)
-      .populate('dataEntries.createdBy', 'email')
-      .populate('dataEntries.lastUpdatedBy', 'email');
+    const updatedCategory = await Category.findById(categoryId);
     
     res.json({
       success: true,
@@ -526,9 +511,7 @@ const reorderDataEntries = async (req, res) => {
 // GET /api/category/active - Get active categories with data entries
 const getActiveCategories = async (req, res) => {
   try {
-    const categories = await Category.getActiveCategories()
-      .populate('createdBy', 'email')
-      .lean();
+    const categories = await Category.getActiveCategories().lean();
     
     res.json({
       success: true,
@@ -556,9 +539,7 @@ const searchCategories = async (req, res) => {
       });
     }
     
-    const categories = await Category.searchCategories(searchTerm)
-      .populate('createdBy', 'email')
-      .lean();
+    const categories = await Category.searchCategories(searchTerm).lean();
     
     res.json({
       success: true,
