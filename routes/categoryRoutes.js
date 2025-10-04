@@ -29,22 +29,7 @@ router.get('/stats', getCategoryStats);
 // GET /api/category - Get all categories with pagination and filtering
 router.get('/', getAllCategories);
 
-// GET /api/category/:id - Get category by ID
-router.get('/:id', getCategoryById);
-
-// POST /api/category - Create new category
-router.post('/', createCategory);
-
-// PUT /api/category/:id - Update category
-router.put('/:id', updateCategory);
-
-// DELETE /api/category/:id - Delete category
-router.delete('/:id', deleteCategory);
-
-// DELETE /api/category - Delete all categories
-router.delete('/', deleteAllCategories);
-
-// Data Entry Management Routes
+// Data Entry Management Routes - These must come before /:id routes
 
 // GET /api/category/:id/data - Get data entries for category
 router.get('/:id/data', getCategoryDataEntries);
@@ -60,5 +45,22 @@ router.delete('/:id/data/:entryId', deleteDataEntry);
 
 // PATCH /api/category/:id/data/reorder - Reorder data entries
 router.patch('/:id/data/reorder', reorderDataEntries);
+
+// Category Management Routes
+
+// GET /api/category/:id - Get category by ID
+router.get('/:id', getCategoryById);
+
+// POST /api/category - Create new category
+router.post('/', createCategory);
+
+// PUT /api/category/:id - Update category
+router.put('/:id', updateCategory);
+
+// DELETE /api/category/:id - Delete category
+router.delete('/:id', deleteCategory);
+
+// DELETE /api/category - Delete all categories
+router.delete('/', deleteAllCategories);
 
 module.exports = router;
