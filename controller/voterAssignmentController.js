@@ -11,7 +11,7 @@ const getVotersWithAssignmentStatus = async (req, res) => {
       limit = 20, 
       voterType = 'Voter',
       search,
-      sortBy = 'createdAt', 
+      sortBy = 'Voter Name Eng', 
       sortOrder = 'desc',
       isActive = true,
       assignedOnly = false
@@ -25,17 +25,37 @@ const getVotersWithAssignmentStatus = async (req, res) => {
     // Build search filter
     let searchFilter = {};
     if (search) {
-      searchFilter = {
-        $or: [
-          { fullName: { $regex: search, $options: 'i' } },
-          { voterId: { $regex: search, $options: 'i' } },
-          { phoneNumber: { $regex: search, $options: 'i' } },
-          { address: { $regex: search, $options: 'i' } },
-          { city: { $regex: search, $options: 'i' } },
-          { state: { $regex: search, $options: 'i' } },
-          { pincode: { $regex: search, $options: 'i' } }
-        ]
-      };
+      if (voterType === 'Voter') {
+        // Search fields for Voter collection
+        searchFilter = {
+          $or: [
+            { 'Voter Name Eng': { $regex: search, $options: 'i' } },
+            { 'Voter Name': { $regex: search, $options: 'i' } },
+            { 'Relative Name Eng': { $regex: search, $options: 'i' } },
+            { 'Relative Name': { $regex: search, $options: 'i' } },
+            { 'Address': { $regex: search, $options: 'i' } },
+            { 'Address Eng': { $regex: search, $options: 'i' } },
+            { 'AC': { $regex: search, $options: 'i' } },
+            { 'Part': { $regex: search, $options: 'i' } },
+            { 'Booth': { $regex: search, $options: 'i' } }
+          ]
+        };
+      } else {
+        // Search fields for VoterFour collection
+        searchFilter = {
+          $or: [
+            { 'Voter Name Eng': { $regex: search, $options: 'i' } },
+            { 'Voter Name': { $regex: search, $options: 'i' } },
+            { 'Relative Name Eng': { $regex: search, $options: 'i' } },
+            { 'Relative Name': { $regex: search, $options: 'i' } },
+            { 'Address': { $regex: search, $options: 'i' } },
+            { 'Address Eng': { $regex: search, $options: 'i' } },
+            { 'AC': { $regex: search, $options: 'i' } },
+            { 'Part': { $regex: search, $options: 'i' } },
+            { 'Booth': { $regex: search, $options: 'i' } }
+          ]
+        };
+      }
     }
     
     // Sort options
