@@ -18,11 +18,6 @@ const voterAssignmentSchema = new mongoose.Schema({
     required: true,
     index: true
   },
-  assignedBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Admin',
-    required: true
-  },
   assignedAt: {
     type: Date,
     default: Date.now,
@@ -46,7 +41,6 @@ const voterAssignmentSchema = new mongoose.Schema({
 voterAssignmentSchema.index({ subAdminId: 1, voterId: 1, voterType: 1 }, { unique: true });
 voterAssignmentSchema.index({ subAdminId: 1, isActive: 1 });
 voterAssignmentSchema.index({ voterId: 1, voterType: 1, isActive: 1 });
-voterAssignmentSchema.index({ assignedBy: 1, assignedAt: -1 });
 
 // Static method to get assigned voters for a sub admin
 voterAssignmentSchema.statics.getAssignedVoters = async function(subAdminId, voterType = null) {

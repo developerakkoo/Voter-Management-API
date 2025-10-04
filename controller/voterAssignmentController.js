@@ -7,7 +7,6 @@ const VoterFour = require('../models/VoterFour');
 const assignVotersToSubAdmin = async (req, res) => {
   try {
     const { subAdminId, voterIds, voterType, notes } = req.body;
-    const adminId = req.adminId; // From auth middleware
     
     // Validate required fields
     if (!subAdminId || !voterIds || !Array.isArray(voterIds) || !voterType) {
@@ -66,7 +65,7 @@ const assignVotersToSubAdmin = async (req, res) => {
       subAdminId,
       voterId,
       voterType,
-      assignedBy: adminId,
+
       notes: notes || null
     }));
     
