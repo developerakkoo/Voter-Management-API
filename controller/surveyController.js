@@ -923,6 +923,258 @@ const getAvailableVoters = async (req, res) => {
   }
 };
 
+// GET /api/survey/map-data - Get surveys data optimized for Google Maps plotting (Streaming)
+const getSurveyMapData = async (req, res) => {
+  try {
+    const { 
+      status = 'completed',
+      voterType = 'all', // 'all', 'Voter', 'VoterFour'
+      includeMembers = 'true',
+      batchSize = 1000 // Number of records per batch
+    } = req.query;
+
+    // Build filter
+    const filter = {};
+    if (status) filter.status = status;
+    if (voterType !== 'all') filter.voterType = voterType;
+    
+    // Only get surveys with valid location data
+    filter['location.latitude'] = { $exists: true, $ne: null };
+    filter['location.longitude'] = { $exists: true, $ne: null };
+
+    // Set response headers for streaming
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Transfer-Encoding', 'chunked');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    // Start response with opening bracket and metadata
+    res.write('{"success":true,"data":[');
+
+    let isFirstBatch = true;
+    let totalProcessed = 0;
+    let batchCount = 0;
+
+    // Create cursor for streaming
+    const cursor = Survey.find(filter)
+      .populate('voterId', 'Voter Name Eng Voter Name CardNo pno CodeNo Address Address Eng AC Part Booth')
+      .populate('surveyorId', 'fullName userId pno')
+      .cursor();
+
+    // Process surveys in batches
+    for await (const survey of cursor) {
+      batchCount++;
+      
+      // Add comma separator for batches (except first)
+      if (!isFirstBatch) {
+        res.write(',');
+      }
+      isFirstBatch = false;
+
+      const voter = survey.voterId;
+      
+      // Get voter identifier (CardNo, pno, or CodeNo)
+      let voterIdentifier = '';
+      if (voter) {
+        voterIdentifier = voter.CardNo || voter.pno || voter.CodeNo || '';
+      }
+
+      // Get voter name
+      const voterName = voter ? (voter['Voter Name Eng'] || voter['Voter Name'] || 'Unknown') : 'Unknown';
+      
+      // Get address
+      const address = voter ? (voter['Address Eng'] || voter.Address || '') : '';
+      
+      // Get booth/AC info
+      const booth = voter ? (voter.Booth || voter['Booth no'] || '') : '';
+      const ac = voter ? (voter.AC || '') : '';
+      const part = voter ? (voter.Part || '') : '';
+
+      // Transform members data
+      const members = includeMembers === 'true' ? (survey.members || []).map(member => ({
+        name: member.name || '',
+        age: member.age || 0,
+        phoneNumber: member.phoneNumber || '',
+        relationship: member.relationship || '',
+        isVoter: member.isVoter || false,
+        voterId: member.voterId || null,
+        voterType: member.voterType || null
+      })) : [];
+
+      // Create survey object for streaming
+      const surveyData = {
+        surveyId: survey._id,
+        voterId: survey.voterId ? survey.voterId._id : null,
+        voterType: survey.voterType,
+        voterName: voterName,
+        voterIdentifier: voterIdentifier,
+        address: address,
+        booth: booth,
+        ac: ac,
+        part: part,
+        phoneNumber: survey.voterPhoneNumber,
+        location: {
+          lat: survey.location.latitude,
+          lng: survey.location.longitude,
+          accuracy: survey.location.accuracy || null
+        },
+        surveyor: {
+          id: survey.surveyorId ? survey.surveyorId._id : null,
+          name: survey.surveyorId ? survey.surveyorId.fullName : 'Unknown',
+          userId: survey.surveyorId ? survey.surveyorId.userId : '',
+          pno: survey.surveyorId ? survey.surveyorId.pno : ''
+        },
+        status: survey.status,
+        members: members,
+        membersCount: members.length,
+        completedAt: survey.completedAt,
+        submittedAt: survey.submittedAt,
+        notes: survey.notes || '',
+        createdAt: survey.createdAt
+      };
+
+      // Stream the survey data
+      res.write(JSON.stringify(surveyData));
+      totalProcessed++;
+
+      // Optional: Add progress indicator every 1000 records
+      if (totalProcessed % 1000 === 0) {
+        console.log(`Processed ${totalProcessed} surveys...`);
+      }
+
+      // Optional: Add delay for very large datasets to prevent overwhelming
+      if (totalProcessed % parseInt(batchSize) === 0) {
+        await new Promise(resolve => setTimeout(resolve, 10)); // 10ms delay
+      }
+    }
+
+    // Close the data array and add metadata
+    res.write(`],"meta":{"totalProcessed":${totalProcessed},"filters":{"status":"${status}","voterType":"${voterType}","includeMembers":${includeMembers},"batchSize":${parseInt(batchSize)}},"streaming":true,"performance":{"recordsPerSecond":${totalProcessed > 0 ? Math.round(totalProcessed / ((Date.now() - Date.now()) / 1000)) : 0}}}`);
+    res.write('}');
+    res.end();
+
+  } catch (error) {
+    console.error('Get survey map data streaming error:', error);
+    
+    // Send error response
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        message: 'Error streaming survey map data',
+        error: error.message
+      });
+    } else {
+      // If headers already sent, close the stream
+      res.end();
+    }
+  }
+};
+
+// GET /api/survey/map-data/stats - Get survey statistics for map data (separate endpoint for performance)
+const getSurveyMapStats = async (req, res) => {
+  try {
+    const { 
+      status = 'completed',
+      voterType = 'all'
+    } = req.query;
+
+    // Build filter
+    const filter = {};
+    if (status) filter.status = status;
+    if (voterType !== 'all') filter.voterType = voterType;
+    
+    // Only get surveys with valid location data
+    filter['location.latitude'] = { $exists: true, $ne: null };
+    filter['location.longitude'] = { $exists: true, $ne: null };
+
+    // Get aggregated statistics
+    const stats = await Survey.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: null,
+          totalSurveys: { $sum: 1 },
+          byStatus: {
+            $push: '$status'
+          },
+          byVoterType: {
+            $push: '$voterType'
+          },
+          bySurveyor: {
+            $push: '$surveyorId'
+          },
+          withMembers: {
+            $sum: {
+              $cond: [{ $gt: [{ $size: { $ifNull: ['$members', []] } }, 0] }, 1, 0]
+            }
+          },
+          withoutMembers: {
+            $sum: {
+              $cond: [{ $lte: [{ $size: { $ifNull: ['$members', []] } }, 0] }, 1, 0]
+            }
+          }
+        }
+      }
+    ]);
+
+    if (stats.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          totalSurveys: 0,
+          byStatus: {},
+          byVoterType: {},
+          bySurveyor: {},
+          withMembers: 0,
+          withoutMembers: 0
+        },
+        filters: { status, voterType }
+      });
+    }
+
+    const result = stats[0];
+    
+    // Count occurrences
+    const statusCounts = {};
+    result.byStatus.forEach(status => {
+      statusCounts[status] = (statusCounts[status] || 0) + 1;
+    });
+
+    const voterTypeCounts = {};
+    result.byVoterType.forEach(type => {
+      voterTypeCounts[type] = (voterTypeCounts[type] || 0) + 1;
+    });
+
+    // Get surveyor counts (would need population for names)
+    const surveyorCounts = {};
+    const uniqueSurveyors = [...new Set(result.bySurveyor.map(id => id.toString()))];
+    uniqueSurveyors.forEach(id => {
+      surveyorCounts[id] = (surveyorCounts[id] || 0) + 1;
+    });
+
+    res.json({
+      success: true,
+      data: {
+        totalSurveys: result.totalSurveys,
+        byStatus: statusCounts,
+        byVoterType: voterTypeCounts,
+        bySurveyor: surveyorCounts,
+        withMembers: result.withMembers,
+        withoutMembers: result.withoutMembers
+      },
+      filters: { status, voterType }
+    });
+
+  } catch (error) {
+    console.error('Get survey map stats error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching survey map statistics',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getAllSurveys,
   getSurveyById,
@@ -935,5 +1187,7 @@ module.exports = {
   searchSurveys,
   getSurveysBySurveyor,
   getSurveysByVoter,
-  getAvailableVoters
+  getAvailableVoters,
+  getSurveyMapData,
+  getSurveyMapStats
 };

@@ -12,11 +12,19 @@ const {
   searchSurveys,
   getSurveysBySurveyor,
   getSurveysByVoter,
-  getAvailableVoters
+  getAvailableVoters,
+  getSurveyMapData,
+  getSurveyMapStats
 } = require('../controller/surveyController');
 
 // GET /api/survey/stats - Get survey statistics
 router.get('/stats', getSurveyStats);
+
+// GET /api/survey/map-data - Get surveys data optimized for Google Maps plotting (Streaming)
+router.get('/map-data', getSurveyMapData);
+
+// GET /api/survey/map-data/stats - Get survey statistics for map data
+router.get('/map-data/stats', getSurveyMapStats);
 
 // GET /api/survey/available-voters - Get available voters for testing
 router.get('/available-voters', getAvailableVoters);
