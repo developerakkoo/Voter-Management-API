@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const {
-  assignVotersToSubAdmin,
+  getAllAssignments,
   unassignVotersFromSubAdmin,
   getSubAdminAssignments,
   getVoterAssignments,
@@ -10,8 +10,8 @@ const {
 } = require('../controller/voterAssignmentController');
 // const { authenticateToken } = require('../middleware/auth');
 
-// POST /api/assignment/assign - Assign voters to sub admin (Admin only)
-router.post('/assign', assignVotersToSubAdmin);
+// GET /api/assignment - Get all assignments with filtering (Admin only)
+router.get('/', getAllAssignments);
 
 // DELETE /api/assignment/unassign - Unassign voters from sub admin (Admin only)
 router.delete('/unassign', unassignVotersFromSubAdmin);

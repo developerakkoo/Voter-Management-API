@@ -3,88 +3,61 @@ const SubAdmin = require('../models/SubAdmin');
 const Voter = require('../models/Voter');
 const VoterFour = require('../models/VoterFour');
 
-// POST /api/assignment/assign - Assign voters to sub admin (Admin only)
-const assignVotersToSubAdmin = async (req, res) => {
+// GET /api/assignment - Get all assignments with filtering (Admin only)
+const getAllAssignments = async (req, res) => {
   try {
-    const { subAdminId, voterIds, voterType, notes } = req.body;
-    
-    // Validate required fields
-    if (!subAdminId || !voterIds || !Array.isArray(voterIds) || !voterType) {
-      return res.status(400).json({
-        success: false,
-        message: 'Sub admin ID, voter IDs array, and voter type are required'
-      });
-    }
-    
-    // Validate voter type
-    if (!['Voter', 'VoterFour'].includes(voterType)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Voter type must be either "Voter" or "VoterFour"'
-      });
-    }
-    
-    // Check if sub admin exists
-    const subAdmin = await SubAdmin.findById(subAdminId);
-    if (!subAdmin) {
-      return res.status(404).json({
-        success: false,
-        message: 'Sub admin not found'
-      });
-    }
-    
-    // Check if voters exist
-    const VoterModel = voterType === 'Voter' ? Voter : VoterFour;
-    const existingVoters = await VoterModel.find({ _id: { $in: voterIds } });
-    
-    if (existingVoters.length !== voterIds.length) {
-      return res.status(400).json({
-        success: false,
-        message: 'Some voters not found'
-      });
-    }
-    
-    // Check for existing assignments
-    const existingAssignments = await VoterAssignment.find({
+    const { 
+      page = 1, 
+      limit = 20, 
+      voterType, 
       subAdminId,
-      voterId: { $in: voterIds },
-      voterType,
-      isActive: true
-    });
+      sortBy = 'assignedAt', 
+      sortOrder = 'desc',
+      isActive = true
+    } = req.query;
     
-    if (existingAssignments.length > 0) {
-      return res.status(409).json({
-        success: false,
-        message: 'Some voters are already assigned to this sub admin',
-        alreadyAssigned: existingAssignments.map(a => a.voterId)
-      });
-    }
+    const skip = (parseInt(page) - 1) * parseInt(limit);
     
-    // Create assignments
-    const assignments = voterIds.map(voterId => ({
-      subAdminId,
-      voterId,
-      voterType,
-
-      notes: notes || null
-    }));
+    // Build filter criteria
+    const filter = {};
+    if (voterType) filter.voterType = voterType;
+    if (subAdminId) filter.subAdminId = subAdminId;
+    if (isActive !== undefined) filter.isActive = isActive === 'true';
     
-    const createdAssignments = await VoterAssignment.insertMany(assignments);
+    // Sort options
+    const sortOptions = {};
+    sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
     
-    res.status(201).json({
+    const [assignments, totalCount] = await Promise.all([
+      VoterAssignment.find(filter)
+        .populate('voterId')
+        .populate('subAdminId', 'fullName userId locationName')
+        .sort(sortOptions)
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      VoterAssignment.countDocuments(filter)
+    ]);
+    
+    const totalPages = Math.ceil(totalCount / parseInt(limit));
+    
+    res.json({
       success: true,
-      message: `Successfully assigned ${createdAssignments.length} voters to sub admin`,
-      data: {
-        subAdminId,
-        assignedCount: createdAssignments.length,
-        assignments: createdAssignments
+      data: assignments,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages,
+        totalCount,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+        limit: parseInt(limit)
       }
     });
   } catch (error) {
-    console.error('Assign voters error:', error);
+    console.error('Get all assignments error:', error);
     res.status(500).json({
       success: false,
-      message: 'Error assigning voters',
+      message: 'Error fetching assignments',
       error: error.message
     });
   }
@@ -151,7 +124,6 @@ const getSubAdminAssignments = async (req, res) => {
     const [assignments, totalCount] = await Promise.all([
       VoterAssignment.find(filter)
         .populate('voterId')
-        .populate('assignedBy', 'email')
         .sort(sortOptions)
         .skip(skip)
         .limit(parseInt(limit))
@@ -194,7 +166,6 @@ const getVoterAssignments = async (req, res) => {
       isActive: true
     })
     .populate('subAdminId', 'fullName userId locationName')
-    .populate('assignedBy', 'email')
     .sort({ assignedAt: -1 })
     .lean();
     
@@ -263,7 +234,6 @@ const getAssignmentStats = async (req, res) => {
       ]),
       VoterAssignment.find({ isActive: true })
         .populate('subAdminId', 'fullName userId')
-        .populate('assignedBy', 'email')
         .sort({ assignedAt: -1 })
         .limit(10)
         .lean()
@@ -319,7 +289,7 @@ const deleteAssignment = async (req, res) => {
 };
 
 module.exports = {
-  assignVotersToSubAdmin,
+  getAllAssignments,
   unassignVotersFromSubAdmin,
   getSubAdminAssignments,
   getVoterAssignments,
