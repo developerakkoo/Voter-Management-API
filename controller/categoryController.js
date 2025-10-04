@@ -399,8 +399,8 @@ const deleteDataEntry = async (req, res) => {
 // GET /api/category/:id/data - Get data entries for category
 const getCategoryDataEntries = async (req, res) => {
   try {
+    const categoryId = req.params.id;
     const { 
-      id: categoryId,
       activeOnly = 'true',
       search,
       sortBy = 'title',
