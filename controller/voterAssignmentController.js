@@ -3,6 +3,124 @@ const SubAdmin = require('../models/SubAdmin');
 const Voter = require('../models/Voter');
 const VoterFour = require('../models/VoterFour');
 
+// GET /api/assignment/voters - Get all voters with assignment status (Admin only)
+const getVotersWithAssignmentStatus = async (req, res) => {
+  try {
+    const { 
+      page = 1, 
+      limit = 20, 
+      voterType = 'Voter',
+      search,
+      sortBy = 'createdAt', 
+      sortOrder = 'desc',
+      isActive = true,
+      assignedOnly = false
+    } = req.query;
+    
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    // Select the appropriate model
+    const VoterModel = voterType === 'Voter' ? Voter : VoterFour;
+    
+    // Build search filter
+    let searchFilter = {};
+    if (search) {
+      searchFilter = {
+        $or: [
+          { fullName: { $regex: search, $options: 'i' } },
+          { voterId: { $regex: search, $options: 'i' } },
+          { phoneNumber: { $regex: search, $options: 'i' } },
+          { address: { $regex: search, $options: 'i' } },
+          { city: { $regex: search, $options: 'i' } },
+          { state: { $regex: search, $options: 'i' } },
+          { pincode: { $regex: search, $options: 'i' } }
+        ]
+      };
+    }
+    
+    // Sort options
+    const sortOptions = {};
+    sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
+    
+    // Get all voters with pagination
+    const [voters, totalCount] = await Promise.all([
+      VoterModel.find(searchFilter)
+        .sort(sortOptions)
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      VoterModel.countDocuments(searchFilter)
+    ]);
+    
+    // Get all voter IDs for assignment lookup
+    const voterIds = voters.map(voter => voter._id.toString());
+    
+    // Get assignment information for these voters
+    const assignments = await VoterAssignment.find({
+      voterId: { $in: voterIds },
+      voterType,
+      isActive: true
+    }).populate('subAdminId', 'fullName userId locationName').lean();
+    
+    // Create assignment lookup map
+    const assignmentMap = {};
+    assignments.forEach(assignment => {
+      assignmentMap[assignment.voterId.toString()] = {
+        isAssigned: true,
+        subAdmin: assignment.subAdminId,
+        assignedAt: assignment.assignedAt,
+        assignmentId: assignment._id,
+        notes: assignment.notes
+      };
+    });
+    
+    // Add assignment status to each voter
+    const votersWithAssignment = voters.map(voter => ({
+      ...voter,
+      assignmentStatus: assignmentMap[voter._id.toString()] || {
+        isAssigned: false,
+        subAdmin: null,
+        assignedAt: null,
+        assignmentId: null,
+        notes: null
+      }
+    }));
+    
+    // Filter by assignment status if requested
+    let filteredVoters = votersWithAssignment;
+    if (assignedOnly === 'true') {
+      filteredVoters = votersWithAssignment.filter(voter => voter.assignmentStatus.isAssigned);
+    }
+    
+    const totalPages = Math.ceil(totalCount / parseInt(limit));
+    
+    res.json({
+      success: true,
+      data: filteredVoters,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages,
+        totalCount,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+        limit: parseInt(limit)
+      },
+      assignmentStats: {
+        totalVoters: voters.length,
+        assignedVoters: assignments.length,
+        unassignedVoters: voters.length - assignments.length
+      }
+    });
+  } catch (error) {
+    console.error('Get voters with assignment status error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching voters with assignment status',
+      error: error.message
+    });
+  }
+};
+
 // GET /api/assignment - Get all assignments with filtering (Admin only)
 const getAllAssignments = async (req, res) => {
   try {
@@ -289,6 +407,7 @@ const deleteAssignment = async (req, res) => {
 };
 
 module.exports = {
+  getVotersWithAssignmentStatus,
   getAllAssignments,
   unassignVotersFromSubAdmin,
   getSubAdminAssignments,

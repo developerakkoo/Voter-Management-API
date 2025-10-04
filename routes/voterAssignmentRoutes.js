@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const {
+  getVotersWithAssignmentStatus,
   getAllAssignments,
   unassignVotersFromSubAdmin,
   getSubAdminAssignments,
@@ -9,6 +10,9 @@ const {
   deleteAssignment
 } = require('../controller/voterAssignmentController');
 // const { authenticateToken } = require('../middleware/auth');
+
+// GET /api/assignment/voters - Get all voters with assignment status (Admin only)
+router.get('/voters', getVotersWithAssignmentStatus);
 
 // GET /api/assignment - Get all assignments with filtering (Admin only)
 router.get('/', getAllAssignments);
