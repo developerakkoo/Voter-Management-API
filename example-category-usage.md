@@ -1,37 +1,400 @@
-# Category API with Nested Data Management
+# Category Management API
 
 ## Overview
-The Category API provides a comprehensive system for creating categories and managing multiple data entries within each category. This allows for organized data management with hierarchical structure.
+The Category Management API allows you to create, manage, and organize categories with their associated data entries. Each category can contain multiple data entries, and you can perform full CRUD operations on both categories and their data entries.
 
-## Category Model Features
 
-### Core Category Fields
-- `name` - Category name (required, unique, max 100 chars)
-- `description` - Category description (max 500 chars)
-- `isActive` - Category active status (default: true)
-- `order` - Display order (default: 0)
-- `tags` - Array of tags for categorization
-- `metadata` - Additional metadata object
+## Data Model
 
-### Data Entry Fields (Nested within Category)
-- `title` - Data entry title (required, max 200 chars)
-- `description` - Data entry description (required, max 1000 chars)
-- `info` - Additional information (max 2000 chars)
-- `isActive` - Data entry active status (default: true)
-- `order` - Display order within category (default: 0)
-- `metadata` - Additional metadata object
+### Category Schema
+```javascript
+{
+  _id: ObjectId,
+  name: String (required, unique, max: 100),
+  description: String (max: 500),
+  dataEntries: [DataEntrySchema],
+  isActive: Boolean (default: true),
+  createdBy: ObjectId (ref: 'Admin'),
+  lastUpdatedBy: ObjectId (ref: 'Admin'),
+  createdAt: Date,
+  updatedAt: Date
+}
+```
 
-### Audit Fields
-- `createdBy` - Creator reference
-- `lastUpdatedBy` - Last updater reference
-- `createdAt` - Creation timestamp
-- `updatedAt` - Last update timestamp
+### Data Entry Schema
+```javascript
+{
+  _id: ObjectId,
+  title: String (required, max: 200),
+  description: String (required, max: 1000),
+  info: String (max: 2000),
+  isActive: Boolean (default: true),
+  createdBy: ObjectId (ref: 'Admin'),
+  lastUpdatedBy: ObjectId (ref: 'Admin'),
+  createdAt: Date,
+  updatedAt: Date
+}
+```
 
-## API Endpoints
+## Endpoints
 
-### 1. Public Endpoints (No Authentication Required)
+### 1. Get All Categories
+Retrieve all categories with pagination, filtering, and search capabilities.
 
-#### Get Active Categories
+```bash
+GET /api/category?page=1&limit=20&isActive=true&search=term&sortBy=name&sortOrder=asc&includeDataEntries=false
+
+```
+
+**Query Parameters:**
+- `page` (optional): Page number (default: 1)
+- `limit` (optional): Items per page (default: 20)
+- `isActive` (optional): Filter by active status (true/false)
+- `search` (optional): Search term (searches in name, description, and data entry fields)
+- `sortBy` (optional): Sort field (default: "name")
+- `sortOrder` (optional): Sort direction "asc" or "desc" (default: "asc")
+- `includeDataEntries` (optional): Include data entries in response (default: false)
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "_id": "64f8a1b2c3d4e5f6a7b8c9d0",
+      "name": "Technology",
+      "description": "Technology related information",
+      "isActive": true,
+      "createdBy": {
+        "_id": "64f8a1b2c3d4e5f6a7b8c9d1",
+        "email": "admin@example.com"
+      },
+      "lastUpdatedBy": {
+        "_id": "64f8a1b2c3d4e5f6a7b8c9d1",
+        "email": "admin@example.com"
+      },
+      "createdAt": "2024-01-15T10:30:00.000Z",
+      "updatedAt": "2024-01-15T10:30:00.000Z"
+    }
+  ],
+  "pagination": {
+    "currentPage": 1,
+    "totalPages": 5,
+    "totalCount": 100,
+    "hasNextPage": true,
+    "hasPrevPage": false,
+    "limit": 20
+  }
+}
+```
+
+### 2. Get Category by ID
+Retrieve a specific category with all its data entries.
+
+```bash
+GET /api/category/64f8a1b2c3d4e5f6a7b8c9d0
+
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "_id": "64f8a1b2c3d4e5f6a7b8c9d0",
+    "name": "Technology",
+    "description": "Technology related information",
+    "dataEntries": [
+      {
+        "_id": "64f8a1b2c3d4e5f6a7b8c9d2",
+        "title": "JavaScript",
+        "description": "Programming language for web development",
+        "info": "JavaScript is a versatile programming language...",
+        "isActive": true,
+        "createdBy": {
+          "_id": "64f8a1b2c3d4e5f6a7b8c9d1",
+          "email": "admin@example.com"
+        },
+        "createdAt": "2024-01-15T10:30:00.000Z",
+        "updatedAt": "2024-01-15T10:30:00.000Z"
+      }
+    ],
+    "isActive": true,
+    "createdBy": {
+      "_id": "64f8a1b2c3d4e5f6a7b8c9d1",
+      "email": "admin@example.com"
+    },
+    "createdAt": "2024-01-15T10:30:00.000Z",
+    "updatedAt": "2024-01-15T10:30:00.000Z"
+  }
+}
+```
+
+### 3. Create Category
+Create a new category.
+
+```bash
+POST /api/category
+Content-Type: application/json
+
+
+{
+  "name": "Technology",
+  "description": "Technology related information"
+}
+```
+
+**Request Body:**
+- `name` (required): Category name (unique, max 100 characters)
+- `description` (optional): Category description (max 500 characters)
+
+**Response (201):**
+```json
+{
+  "success": true,
+  "message": "Category created successfully",
+  "data": {
+    "_id": "64f8a1b2c3d4e5f6a7b8c9d0",
+    "name": "Technology",
+    "description": "Technology related information",
+    "dataEntries": [],
+    "isActive": true,
+    "createdBy": "64f8a1b2c3d4e5f6a7b8c9d1",
+    "createdAt": "2024-01-15T10:30:00.000Z",
+    "updatedAt": "2024-01-15T10:30:00.000Z"
+  }
+}
+```
+
+### 4. Update Category
+Update an existing category.
+
+```bash
+PUT /api/category/64f8a1b2c3d4e5f6a7b8c9d0
+Content-Type: application/json
+
+
+{
+  "name": "Advanced Technology",
+  "description": "Advanced technology concepts and information",
+  "isActive": true
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Category updated successfully",
+  "data": {
+    "_id": "64f8a1b2c3d4e5f6a7b8c9d0",
+    "name": "Advanced Technology",
+    "description": "Advanced technology concepts and information",
+    "isActive": true,
+    "lastUpdatedBy": "64f8a1b2c3d4e5f6a7b8c9d1",
+    "updatedAt": "2024-01-15T11:30:00.000Z"
+  }
+}
+```
+
+### 5. Delete Category
+Delete a category and all its data entries.
+
+```bash
+DELETE /api/category/64f8a1b2c3d4e5f6a7b8c9d0
+
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Category deleted successfully"
+}
+```
+
+### 6. Add Data Entry to Category
+Add a new data entry to a specific category.
+
+```bash
+POST /api/category/64f8a1b2c3d4e5f6a7b8c9d0/data
+Content-Type: application/json
+
+
+{
+  "title": "React.js",
+  "description": "JavaScript library for building user interfaces",
+  "info": "React is a declarative, efficient, and flexible JavaScript library for building user interfaces."
+}
+```
+
+**Request Body:**
+- `title` (required): Entry title (max 200 characters)
+- `description` (required): Entry description (max 1000 characters)
+- `info` (optional): Additional information (max 2000 characters)
+
+**Response (201):**
+```json
+{
+  "success": true,
+  "message": "Data entry added successfully",
+  "data": {
+    "_id": "64f8a1b2c3d4e5f6a7b8c9d0",
+    "name": "Technology",
+    "description": "Technology related information",
+    "dataEntries": [
+      {
+        "_id": "64f8a1b2c3d4e5f6a7b8c9d3",
+        "title": "React.js",
+        "description": "JavaScript library for building user interfaces",
+        "info": "React is a declarative, efficient, and flexible JavaScript library...",
+        "isActive": true,
+        "createdBy": "64f8a1b2c3d4e5f6a7b8c9d1",
+        "createdAt": "2024-01-15T12:30:00.000Z",
+        "updatedAt": "2024-01-15T12:30:00.000Z"
+      }
+    ]
+  }
+}
+```
+
+### 7. Update Data Entry
+Update an existing data entry within a category.
+
+```bash
+PUT /api/category/64f8a1b2c3d4e5f6a7b8c9d0/data/64f8a1b2c3d4e5f6a7b8c9d3
+Content-Type: application/json
+
+
+{
+  "title": "React.js Framework",
+  "description": "Modern JavaScript library for building user interfaces",
+  "info": "React is a declarative, efficient, and flexible JavaScript library for building user interfaces. It lets you compose complex UIs from small and isolated pieces of code called components.",
+  "isActive": true
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Data entry updated successfully",
+  "data": {
+    "_id": "64f8a1b2c3d4e5f6a7b8c9d0",
+    "name": "Technology",
+    "dataEntries": [
+      {
+        "_id": "64f8a1b2c3d4e5f6a7b8c9d3",
+        "title": "React.js Framework",
+        "description": "Modern JavaScript library for building user interfaces",
+        "info": "React is a declarative, efficient, and flexible JavaScript library...",
+        "isActive": true,
+        "lastUpdatedBy": "64f8a1b2c3d4e5f6a7b8c9d1",
+        "updatedAt": "2024-01-15T13:30:00.000Z"
+      }
+    ]
+  }
+}
+```
+
+### 8. Delete Data Entry
+Remove a specific data entry from a category.
+
+```bash
+DELETE /api/category/64f8a1b2c3d4e5f6a7b8c9d0/data/64f8a1b2c3d4e5f6a7b8c9d3
+
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Data entry deleted successfully",
+  "data": {
+    "categoryId": "64f8a1b2c3d4e5f6a7b8c9d0",
+    "remainingEntries": 2
+  }
+}
+```
+
+### 9. Get Category Data Entries
+Retrieve all data entries for a specific category with filtering and sorting.
+
+```bash
+GET /api/category/64f8a1b2c3d4e5f6a7b8c9d0/data?activeOnly=true&search=react&sortBy=title&sortOrder=asc
+
+```
+
+**Query Parameters:**
+- `activeOnly` (optional): Show only active entries (default: true)
+- `search` (optional): Search in title, description, and info fields
+- `sortBy` (optional): Sort field (default: "title")
+- `sortOrder` (optional): Sort direction (default: "asc")
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "category": {
+      "_id": "64f8a1b2c3d4e5f6a7b8c9d0",
+      "name": "Technology",
+      "description": "Technology related information"
+    },
+    "dataEntries": [
+      {
+        "_id": "64f8a1b2c3d4e5f6a7b8c9d3",
+        "title": "React.js Framework",
+        "description": "Modern JavaScript library for building user interfaces",
+        "info": "React is a declarative, efficient, and flexible JavaScript library...",
+        "isActive": true,
+        "createdAt": "2024-01-15T12:30:00.000Z"
+      }
+    ],
+    "totalEntries": 1,
+    "activeEntries": 1
+  }
+}
+```
+
+### 10. Reorder Data Entries
+Reorder data entries within a category.
+
+```bash
+PATCH /api/category/64f8a1b2c3d4e5f6a7b8c9d0/data/reorder
+Content-Type: application/json
+
+
+{
+  "entryIds": [
+    "64f8a1b2c3d4e5f6a7b8c9d3",
+    "64f8a1b2c3d4e5f6a7b8c9d2",
+    "64f8a1b2c3d4e5f6a7b8c9d4"
+  ]
+}
+```
+
+**Request Body:**
+- `entryIds` (required): Array of data entry IDs in the desired order
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Data entries reordered successfully",
+  "data": {
+    "_id": "64f8a1b2c3d4e5f6a7b8c9d0",
+    "name": "Technology",
+    "dataEntries": [
+      // Entries in new order
+    ]
+  }
+}
+```
+
+### 11. Get Active Categories (Public)
+Get all active categories with data entries (no authentication required).
+
 ```bash
 GET /api/category/active
 ```
@@ -43,34 +406,51 @@ GET /api/category/active
   "data": [
     {
       "_id": "64f8a1b2c3d4e5f6a7b8c9d0",
-      "name": "Homes",
-      "description": "Real estate listings",
+      "name": "Technology",
+      "description": "Technology related information",
       "dataEntries": [
-        {
-          "_id": "64f8a1b2c3d4e5f6a7b8c9d1",
-          "title": "Beautiful Villa",
-          "description": "3 bedroom villa with garden",
-          "info": "Located in prime area with all amenities",
-          "isActive": true,
-          "order": 0
-        }
+        // Active data entries only
       ],
-      "isActive": true,
-      "order": 0
+      "createdBy": {
+        "_id": "64f8a1b2c3d4e5f6a7b8c9d1",
+        "email": "admin@example.com"
+      }
     }
   ]
 }
 ```
 
-#### Search Categories
+### 12. Search Categories (Public)
+Search categories and data entries (no authentication required).
+
 ```bash
-GET /api/category/search?q=search_term
+GET /api/category/search?q=javascript
 ```
 
 **Query Parameters:**
-- `q` - Search term (required)
+- `q` (required): Search term
 
-#### Get Category Statistics
+**Response:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "_id": "64f8a1b2c3d4e5f6a7b8c9d0",
+      "name": "Technology",
+      "description": "Technology related information",
+      "dataEntries": [
+        // Matching data entries
+      ]
+    }
+  ],
+  "searchTerm": "javascript"
+}
+```
+
+### 13. Get Category Statistics (Public)
+Get comprehensive statistics about categories and data entries.
+
 ```bash
 GET /api/category/stats
 ```
@@ -80,406 +460,187 @@ GET /api/category/stats
 {
   "success": true,
   "data": {
-    "totalCategories": 10,
-    "activeCategories": 8,
+    "totalCategories": 15,
+    "activeCategories": 12,
     "totalDataEntries": 150,
-    "activeDataEntries": 120
+    "activeDataEntries": 135
   }
 }
 ```
 
-### 2. Admin/SubAdmin Endpoints (Authentication Required)
+### 14. Delete All Categories (Admin Only)
+Delete all categories and their data entries (for testing/reset purposes).
 
-#### Get All Categories
-```bash
-GET /api/category
-Authorization: Bearer JWT_TOKEN
-```
-
-**Query Parameters:**
-- `page` - Page number (default: 1)
-- `limit` - Records per page (default: 20)
-- `isActive` - Filter by active status
-- `search` - Search in name, description, tags
-- `sortBy` - Sort field (default: 'name')
-- `sortOrder` - Sort order (asc/desc, default: asc)
-- `includeDataEntries` - Include data entries in response (true/false)
-
-#### Get Category by ID
-```bash
-GET /api/category/:id
-```
-
-#### Create Category
-```bash
-POST /api/category
-Authorization: Bearer JWT_TOKEN
-Content-Type: application/json
-
-{
-  "name": "Homes",
-  "description": "Real estate listings and property information",
-  "order": 1,
-  "tags": ["real-estate", "property", "homes"],
-  "metadata": {
-    "type": "real-estate",
-    "department": "sales"
-  }
-}
-```
-
-#### Update Category
-```bash
-PUT /api/category/:id
-Authorization: Bearer JWT_TOKEN
-Content-Type: application/json
-
-{
-  "name": "Updated Homes",
-  "description": "Updated real estate listings",
-  "isActive": true,
-  "order": 2
-}
-```
-
-#### Delete Category
-```bash
-DELETE /api/category/:id
-Authorization: Bearer JWT_TOKEN
-```
-
-#### Delete All Categories (Admin Only)
 ```bash
 DELETE /api/category
-Authorization: Bearer ADMIN_JWT_TOKEN
+
 ```
 
-### 3. Data Entry Management
-
-#### Get Data Entries for Category
-```bash
-GET /api/category/:id/data
-Authorization: Bearer JWT_TOKEN
-```
-
-**Query Parameters:**
-- `activeOnly` - Show only active entries (default: true)
-- `search` - Search in title, description, info
-- `sortBy` - Sort field (default: 'order')
-- `sortOrder` - Sort order (asc/desc, default: asc)
-
-#### Add Data Entry to Category
-```bash
-POST /api/category/:id/data
-Authorization: Bearer JWT_TOKEN
-Content-Type: application/json
-
-{
-  "title": "Beautiful Villa",
-  "description": "3 bedroom villa with garden",
-  "info": "Located in prime area with all amenities. Features include swimming pool, garden, and modern kitchen.",
-  "order": 0,
-  "metadata": {
-    "price": "500000",
-    "location": "Downtown",
-    "bedrooms": 3,
-    "bathrooms": 2
-  }
-}
-```
-
-#### Update Data Entry
-```bash
-PUT /api/category/:id/data/:entryId
-Authorization: Bearer JWT_TOKEN
-Content-Type: application/json
-
-{
-  "title": "Updated Villa Title",
-  "description": "Updated description",
-  "info": "Updated information",
-  "isActive": true,
-  "order": 1
-}
-```
-
-#### Delete Data Entry
-```bash
-DELETE /api/category/:id/data/:entryId
-Authorization: Bearer JWT_TOKEN
-```
-
-#### Reorder Data Entries
-```bash
-PATCH /api/category/:id/data/reorder
-Authorization: Bearer JWT_TOKEN
-Content-Type: application/json
-
-{
-  "entryIds": ["entryId1", "entryId2", "entryId3"]
-}
-```
-
-## Example Usage Scenarios
-
-### 1. Create Category with Multiple Data Entries
-
-```bash
-# Step 1: Create category
-POST /api/category
-{
-  "name": "Homes",
-  "description": "Real estate listings",
-  "tags": ["real-estate", "property"]
-}
-
-# Step 2: Add first data entry
-POST /api/category/64f8a1b2c3d4e5f6a7b8c9d0/data
-{
-  "title": "Modern Apartment",
-  "description": "2 bedroom apartment in city center",
-  "info": "Fully furnished with modern amenities",
-  "metadata": {
-    "price": "300000",
-    "bedrooms": 2,
-    "location": "City Center"
-  }
-}
-
-# Step 3: Add second data entry
-POST /api/category/64f8a1b2c3d4e5f6a7b8c9d0/data
-{
-  "title": "Luxury Villa",
-  "description": "5 bedroom luxury villa with pool",
-  "info": "Premium location with all luxury amenities",
-  "metadata": {
-    "price": "1000000",
-    "bedrooms": 5,
-    "location": "Uptown"
-  }
-}
-```
-
-### 2. Search and Filter Data
-
-```bash
-# Search categories
-GET /api/category/search?q=villa
-
-# Get data entries for specific category
-GET /api/category/64f8a1b2c3d4e5f6a7b8c9d0/data?search=apartment&activeOnly=true
-
-# Get all categories with data entries
-GET /api/category?includeDataEntries=true&isActive=true
-```
-
-### 3. Reorder Data Entries
-
-```bash
-# Reorder entries within a category
-PATCH /api/category/64f8a1b2c3d4e5f6a7b8c9d0/data/reorder
-{
-  "entryIds": [
-    "64f8a1b2c3d4e5f6a7b8c9d2",  // Move to position 0
-    "64f8a1b2c3d4e5f6a7b8c9d1",  // Move to position 1
-    "64f8a1b2c3d4e5f6a7b8c9d3"   // Move to position 2
-  ]
-}
-```
-
-## Response Formats
-
-### Category Object
-```json
-{
-  "_id": "64f8a1b2c3d4e5f6a7b8c9d0",
-  "name": "Homes",
-  "description": "Real estate listings and property information",
-  "dataEntries": [
-    {
-      "_id": "64f8a1b2c3d4e5f6a7b8c9d1",
-      "title": "Beautiful Villa",
-      "description": "3 bedroom villa with garden",
-      "info": "Located in prime area with all amenities",
-      "isActive": true,
-      "order": 0,
-      "metadata": {
-        "price": "500000",
-        "location": "Downtown",
-        "bedrooms": 3,
-        "bathrooms": 2
-      },
-      "createdBy": "64f8a1b2c3d4e5f6a7b8c9d2",
-      "lastUpdatedBy": "64f8a1b2c3d4e5f6a7b8c9d2",
-      "createdAt": "2024-01-15T10:30:00.000Z",
-      "updatedAt": "2024-01-15T10:30:00.000Z"
-    }
-  ],
-  "isActive": true,
-  "order": 1,
-  "tags": ["real-estate", "property", "homes"],
-  "metadata": {
-    "type": "real-estate",
-    "department": "sales"
-  },
-  "createdBy": "64f8a1b2c3d4e5f6a7b8c9d2",
-  "lastUpdatedBy": "64f8a1b2c3d4e5f6a7b8c9d2",
-  "createdAt": "2024-01-15T10:30:00.000Z",
-  "updatedAt": "2024-01-15T10:30:00.000Z"
-}
-```
-
-### Data Entries Response
+**Response:**
 ```json
 {
   "success": true,
-  "data": {
-    "category": {
-      "_id": "64f8a1b2c3d4e5f6a7b8c9d0",
-      "name": "Homes",
-      "description": "Real estate listings"
-    },
-    "dataEntries": [
-      {
-        "_id": "64f8a1b2c3d4e5f6a7b8c9d1",
-        "title": "Beautiful Villa",
-        "description": "3 bedroom villa with garden",
-        "info": "Located in prime area with all amenities",
-        "isActive": true,
-        "order": 0
-      }
-    ],
-    "totalEntries": 1,
-    "activeEntries": 1
-  }
+  "message": "Deleted 15 categories"
 }
 ```
 
-## Advanced Features
-
-### 1. Hierarchical Data Management
-- **Categories**: Top-level organization units
-- **Data Entries**: Nested data within categories
-- **Flexible Structure**: Unlimited categories and data entries
-- **Ordering**: Custom ordering for both categories and data entries
-
-### 2. Search and Filtering
-- **Text Search**: Search across category names, descriptions, and data entry content
-- **Active Filtering**: Filter by active/inactive status
-- **Sorting**: Sort by any field with asc/desc order
-- **Pagination**: Efficient handling of large datasets
-
-### 3. Data Entry Management
-- **CRUD Operations**: Full create, read, update, delete for data entries
-- **Bulk Operations**: Reorder multiple entries at once
-- **Search Within Category**: Search data entries within specific categories
-- **Metadata Support**: Flexible metadata for additional information
-
-### 4. Category Management
-- **Unique Names**: Category names must be unique
-- **Ordering**: Custom display order for categories
-- **Tagging**: Flexible tagging system
-- **Status Management**: Active/inactive status control
-
-### 5. Statistics and Analytics
-- **Category Stats**: Total categories, active categories
-- **Data Entry Stats**: Total entries, active entries
-- **Usage Tracking**: Track creation and update activities
-
-## Use Cases
-
-### 1. Real Estate Management
-- **Categories**: Homes, Commercial, Land, Rentals
-- **Data Entries**: Individual property listings with details
-- **Metadata**: Price, location, bedrooms, amenities
-
-### 2. Product Catalog
-- **Categories**: Electronics, Clothing, Books, Home & Garden
-- **Data Entries**: Individual products with specifications
-- **Metadata**: SKU, price, availability, specifications
-
-### 3. Content Management
-- **Categories**: News, Articles, Events, Announcements
-- **Data Entries**: Individual content pieces
-- **Metadata**: Author, publish date, tags, status
-
-### 4. Educational Content
-- **Categories**: Courses, Subjects, Topics
-- **Data Entries**: Individual lessons or materials
-- **Metadata**: Duration, difficulty, prerequisites
-
-### 5. Event Management
-- **Categories**: Conferences, Workshops, Meetings, Social Events
-- **Data Entries**: Individual events
-- **Metadata**: Date, location, capacity, registration info
-
-## Security Features
-
-### 1. Authentication
-- **JWT Tokens**: Secure authentication for protected endpoints
-- **Role-based Access**: Different access levels for admin/subadmin
-- **Public Endpoints**: Some endpoints accessible without authentication
-
-### 2. Data Validation
-- **Input Validation**: Validate all input data
-- **Schema Validation**: MongoDB schema validation
-- **Unique Constraints**: Prevent duplicate category names
-- **Size Limits**: Enforce character limits on text fields
-
-### 3. Error Handling
-- **400 Bad Request**: Invalid data or validation errors
-- **401 Unauthorized**: Invalid or expired token
-- **404 Not Found**: Category or data entry not found
-- **409 Conflict**: Duplicate category name
-- **500 Internal Server Error**: Database or server errors
-
-## Performance Features
-
-### 1. Indexing
-- **Database Indexes**: Optimized queries for better performance
-- **Search Indexes**: Full-text search capabilities
-- **Sorting Indexes**: Efficient sorting operations
-
-### 2. Pagination
-- **Efficient Pagination**: Handle large datasets efficiently
-- **Configurable Limits**: Customizable page sizes
-- **Metadata**: Pagination information in responses
-
-### 3. Caching
-- **Query Optimization**: Efficient database queries
-- **Response Caching**: Cache frequently accessed data
-- **Lazy Loading**: Load data entries only when needed
-
 ## Error Handling
 
-- **400 Bad Request**: Invalid data or validation errors
-- **401 Unauthorized**: Invalid or expired token
-- **404 Not Found**: Category or data entry not found
-- **409 Conflict**: Duplicate category name
-- **500 Internal Server Error**: Database or server errors
+### Common Error Responses
+
+**400 Bad Request:**
+```json
+{
+  "success": false,
+  "message": "Category name is required"
+}
+```
+
+**400 Validation Error:**
+```json
+{
+  "success": false,
+  "message": "Validation error",
+  "errors": ["Name is required", "Description is too long"]
+}
+```
+
+**404 Not Found:**
+```json
+{
+  "success": false,
+  "message": "Category not found"
+}
+```
+
+**409 Duplicate Key:**
+```json
+{
+  "success": false,
+  "message": "Category name already exists"
+}
+```
+
+**500 Internal Server Error:**
+```json
+{
+  "success": false,
+  "message": "Error creating category",
+  "error": "Detailed error message"
+}
+```
+
+## Usage Examples
+
+### Example 1: Create Category with Initial Data
+```bash
+# Step 1: Create category
+curl -X POST http://localhost:3000/api/category \
+  -H "Content-Type: application/json" \
+
+  -d '{
+    "name": "Programming Languages",
+    "description": "Information about various programming languages"
+  }'
+
+# Step 2: Add data entries
+curl -X POST http://localhost:3000/api/category/{category_id}/data \
+  -H "Content-Type: application/json" \
+
+  -d '{
+    "title": "Python",
+    "description": "High-level programming language",
+    "info": "Python is known for its simple syntax and versatility."
+  }'
+```
+
+### Example 2: Search and Filter Categories
+```bash
+# Get active categories with data entries
+curl -X GET "http://localhost:3000/api/category?isActive=true&includeDataEntries=true&search=tech" \
+
+
+# Get categories sorted by creation date
+curl -X GET "http://localhost:3000/api/category?sortBy=createdAt&sortOrder=desc" \
+ 
+```
+
+### Example 3: Manage Data Entries
+```bash
+# Get all data entries for a category
+curl -X GET http://localhost:3000/api/category/{category_id}/data \
+
+
+# Update a data entry
+curl -X PUT http://localhost:3000/api/category/{category_id}/data/{entry_id} \
+  -H "Content-Type: application/json" \
+
+  -d '{
+    "title": "Updated Title",
+    "description": "Updated description",
+    "isActive": true
+  }'
+
+# Delete a data entry
+curl -X DELETE http://localhost:3000/api/category/{category_id}/data/{entry_id} \
+
+```
+
+### Example 4: Public Endpoints
+```bash
+# Get active categories (no auth required)
+curl -X GET http://localhost:3000/api/category/active
+
+# Search categories (no auth required)
+curl -X GET "http://localhost:3000/api/category/search?q=javascript"
+
+# Get statistics (no auth required)
+curl -X GET http://localhost:3000/api/category/stats
+```
+
+## Features Summary
+
+### ✅ **Category Management**
+1. **Create Category** - Add new categories with name and description
+2. **Get All Categories** - List with pagination, search, sort, and filtering
+3. **Get Category by ID** - Retrieve specific category with all data entries
+4. **Update Category** - Modify category name, description, and status
+5. **Delete Category** - Remove category and all associated data entries
+
+### ✅ **Data Entry Management**
+1. **Add Data Entry** - Add new entries to existing categories
+2. **Update Data Entry** - Modify existing data entries
+3. **Delete Data Entry** - Remove specific data entries
+4. **Get Data Entries** - List entries with filtering and sorting
+5. **Reorder Data Entries** - Change the order of entries within a category
+
+### ✅ **Advanced Features**
+1. **Search Functionality** - Search across categories and data entries
+2. **Filtering** - Filter by active status, category, etc.
+3. **Sorting** - Sort by various fields in ascending/descending order
+4. **Pagination** - Handle large datasets efficiently
+5. **Statistics** - Get overview of categories and data entries
+6. **Public Access** - Some endpoints available without authentication
+
+### ✅ **Data Integrity**
+1. **Automatic Cleanup** - Deleting a category removes all its data entries
+2. **Validation** - Proper validation for all input fields
+3. **Unique Constraints** - Category names must be unique
+4. **Audit Trail** - Track who created and last updated records
+5. **Soft Delete** - Data entries can be deactivated instead of deleted
 
 ## Best Practices
 
-### 1. Category Design
-- Use descriptive category names
-- Keep categories focused and specific
-- Use consistent naming conventions
-- Leverage tags for additional categorization
+1. **Use Pagination** - Always use pagination for large datasets
+2. **Search Efficiently** - Use specific search terms for better performance
+3. **Validate Input** - Ensure required fields are provided
+4. **Handle Errors** - Implement proper error handling in frontend
+5. **Cache Public Data** - Cache active categories and statistics
+6. **Monitor Usage** - Track API usage and performance
+7. **Backup Data** - Regular backups of category and data entry information
 
-### 2. Data Entry Management
-- Use clear, descriptive titles
-- Provide comprehensive descriptions
-- Include relevant metadata
-- Maintain consistent ordering
+## Related APIs
 
-### 3. Search Optimization
-- Use relevant keywords in titles and descriptions
-- Leverage tags for better searchability
-- Keep content updated and relevant
-- Use consistent formatting
-
-### 4. Performance
-- Use pagination for large datasets
-- Implement proper indexing
-- Cache frequently accessed data
-- Optimize queries for better performance
+- **Admin API**: `/api/admin/*` - Admin authentication and management
+- **SubAdmin API**: `/api/subadmin/*` - Sub-admin management
+- **Alert API**: `/api/alert/*` - System alerts and notifications

@@ -22,7 +22,8 @@ const getAllCategories = async (req, res) => {
       filter.$or = [
         { name: { $regex: search, $options: 'i' } },
         { description: { $regex: search, $options: 'i' } },
-        { tags: { $in: [new RegExp(search, 'i')] } }
+        { 'dataEntries.title': { $regex: search, $options: 'i' } },
+        { 'dataEntries.description': { $regex: search, $options: 'i' } }
       ];
     }
     
@@ -103,10 +104,7 @@ const createCategory = async (req, res) => {
   try {
     const {
       name,
-      description,
-      order = 0,
-      tags = [],
-      metadata = {}
+      description
     } = req.body;
     
     // Validate required fields
@@ -117,23 +115,10 @@ const createCategory = async (req, res) => {
       });
     }
     
-    // Parse tags if provided as string
-    let parsedTags = tags;
-    if (typeof tags === 'string') {
-      try {
-        parsedTags = JSON.parse(tags);
-      } catch (error) {
-        parsedTags = tags.split(',').map(tag => tag.trim());
-      }
-    }
-    
     // Create new category
     const category = new Category({
       name,
       description,
-      order: parseInt(order),
-      tags: parsedTags,
-      metadata,
       createdBy: req.adminId || req.subAdminId
     });
     
@@ -185,16 +170,6 @@ const updateCategory = async (req, res) => {
       });
     }
     
-    // Parse tags if provided
-    if (updateData.tags) {
-      if (typeof updateData.tags === 'string') {
-        try {
-          updateData.tags = JSON.parse(updateData.tags);
-        } catch (error) {
-          updateData.tags = updateData.tags.split(',').map(tag => tag.trim());
-        }
-      }
-    }
     
     // Add lastUpdatedBy
     updateData.lastUpdatedBy = req.adminId || req.subAdminId;
@@ -290,9 +265,7 @@ const addDataEntry = async (req, res) => {
     const {
       title,
       description,
-      info,
-      order = 0,
-      metadata = {}
+      info
     } = req.body;
     
     // Validate required fields
@@ -316,8 +289,6 @@ const addDataEntry = async (req, res) => {
       title,
       description,
       info,
-      order: parseInt(order),
-      metadata,
       createdBy: req.adminId || req.subAdminId
     };
     
@@ -447,7 +418,7 @@ const getCategoryDataEntries = async (req, res) => {
       id: categoryId,
       activeOnly = 'true',
       search,
-      sortBy = 'order',
+      sortBy = 'title',
       sortOrder = 'asc'
     } = req.query;
     
@@ -474,10 +445,7 @@ const getCategoryDataEntries = async (req, res) => {
     // Sort data entries
     dataEntries.sort((a, b) => {
       let aValue, bValue;
-      if (sortBy === 'order') {
-        aValue = a.order;
-        bValue = b.order;
-      } else if (sortBy === 'title') {
+      if (sortBy === 'title') {
         aValue = a.title.toLowerCase();
         bValue = b.title.toLowerCase();
       } else if (sortBy === 'createdAt') {

@@ -23,14 +23,7 @@ const dataEntrySchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
-  order: {
-    type: Number,
-    default: 0
-  },
-  metadata: {
-    type: mongoose.Schema.Types.Mixed,
-    default: {}
-  },
+  
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Admin',
@@ -63,19 +56,7 @@ const categorySchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
-  order: {
-    type: Number,
-    default: 0
-  },
-  tags: [{
-    type: String,
-    trim: true,
-    maxlength: 30
-  }],
-  metadata: {
-    type: mongoose.Schema.Types.Mixed,
-    default: {}
-  },
+  
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Admin',
@@ -92,8 +73,7 @@ const categorySchema = new mongoose.Schema({
 // Create indexes for better performance
 categorySchema.index({ name: 1 });
 categorySchema.index({ isActive: 1 });
-categorySchema.index({ order: 1 });
-categorySchema.index({ tags: 1 });
+
 categorySchema.index({ createdBy: 1 });
 categorySchema.index({ 'dataEntries.isActive': 1 });
 categorySchema.index({ 'dataEntries.createdAt': -1 });
@@ -134,20 +114,11 @@ categorySchema.methods.removeDataEntry = function(entryId) {
 
 // Method to reorder data entries
 categorySchema.methods.reorderDataEntries = function(entryIds) {
-  const entries = this.dataEntries;
   const reorderedEntries = [];
   
-  entryIds.forEach((id, index) => {
-    const entry = entries.id(id);
+  entryIds.forEach(id => {
+    const entry = this.dataEntries.id(id);
     if (entry) {
-      entry.order = index;
-      reorderedEntries.push(entry);
-    }
-  });
-  
-  // Add remaining entries that weren't in the reorder list
-  entries.forEach(entry => {
-    if (!entryIds.includes(entry._id.toString())) {
       reorderedEntries.push(entry);
     }
   });
@@ -178,7 +149,7 @@ categorySchema.statics.getActiveCategories = function() {
   return this.find({ 
     isActive: true,
     'dataEntries.0': { $exists: true } // Has at least one data entry
-  }).sort({ order: 1, name: 1 });
+  }).sort({ name: 1 });
 };
 
 // Static method to search categories and data entries
@@ -193,7 +164,7 @@ categorySchema.statics.searchCategories = function(searchTerm) {
       { 'dataEntries.description': regex },
       { 'dataEntries.info': regex }
     ]
-  }).sort({ order: 1, name: 1 });
+  }).sort({ name: 1 });
 };
 
 // Static method to get category statistics
