@@ -282,7 +282,7 @@ const getAllAssignments = async (req, res) => {
       subAdminId,
       sortBy = 'assignedAt', 
       sortOrder = 'desc',
-      isActive = true
+      isActive
     } = req.query;
     
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -299,7 +299,6 @@ const getAllAssignments = async (req, res) => {
     
     const [assignments, totalCount] = await Promise.all([
       VoterAssignment.find(filter)
-        .populate('voterId')
         .populate('subAdminId', 'fullName userId locationName')
         .sort(sortOptions)
         .skip(skip)
@@ -308,11 +307,32 @@ const getAllAssignments = async (req, res) => {
       VoterAssignment.countDocuments(filter)
     ]);
     
+    // Get voter information for each assignment
+    const voterIds = assignments.map(a => a.voterId);
+    const assignmentVoterType = voterType || (assignments.length > 0 ? assignments[0].voterType : 'Voter');
+    
+    let voterInfo = {};
+    if (voterIds.length > 0) {
+      const VoterModel = assignmentVoterType === 'Voter' ? Voter : VoterFour;
+      const voters = await VoterModel.find({ _id: { $in: voterIds } }).lean();
+      
+      // Create a lookup map for voter information
+      voters.forEach(voter => {
+        voterInfo[voter._id.toString()] = voter;
+      });
+    }
+    
+    // Add voter information to assignments
+    const assignmentsWithVoterInfo = assignments.map(assignment => ({
+      ...assignment,
+      voterInfo: voterInfo[assignment.voterId.toString()] || null
+    }));
+    
     const totalPages = Math.ceil(totalCount / parseInt(limit));
     
     res.json({
       success: true,
-      data: assignments,
+      data: assignmentsWithVoterInfo,
       pagination: {
         currentPage: parseInt(page),
         totalPages,
