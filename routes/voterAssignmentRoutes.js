@@ -7,7 +7,8 @@ const {
   getSubAdminAssignments,
   getVoterAssignments,
   getAssignmentStats,
-  deleteAssignment
+  deleteAssignment,
+  assignVotersToSubAdmin
 } = require('../controller/voterAssignmentController');
 // const { authenticateToken } = require('../middleware/auth');
 
@@ -16,6 +17,8 @@ router.get('/voters', getVotersWithAssignmentStatus);
 
 // GET /api/assignment - Get all assignments with filtering (Admin only)
 router.get('/', getAllAssignments);
+
+router.post('/assign', assignVotersToSubAdmin);
 
 // DELETE /api/assignment/unassign - Unassign voters from sub admin (Admin only)
 router.delete('/unassign', unassignVotersFromSubAdmin);

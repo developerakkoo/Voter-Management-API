@@ -3,6 +3,97 @@ const SubAdmin = require('../models/SubAdmin');
 const Voter = require('../models/Voter');
 const VoterFour = require('../models/VoterFour');
 
+
+// POST /api/assignment/assign - Assign voters to sub admin (Admin only)
+const assignVotersToSubAdmin = async (req, res) => {
+  try {
+    const { subAdminId, voterIds, voterType, notes } = req.body;
+    
+    // Validate required fields
+    if (!subAdminId || !voterIds || !Array.isArray(voterIds) || !voterType) {
+      return res.status(400).json({
+        success: false,
+        message: 'Sub admin ID, voter IDs array, and voter type are required'
+      });
+    }
+    
+    // Validate voter type
+    if (!['Voter', 'VoterFour'].includes(voterType)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Voter type must be either "Voter" or "VoterFour"'
+      });
+    }
+    
+    // Check if sub admin exists
+    const subAdmin = await SubAdmin.findById(subAdminId);
+    if (!subAdmin) {
+      return res.status(404).json({
+        success: false,
+        message: 'Sub admin not found'
+      });
+    }
+    
+    // Check if voters exist
+    const VoterModel = voterType === 'Voter' ? Voter : VoterFour;
+    const existingVoters = await VoterModel.find({ _id: { $in: voterIds } });
+    
+    if (existingVoters.length !== voterIds.length) {
+      return res.status(400).json({
+        success: false,
+        message: 'Some voters not found'
+      });
+    }
+    
+    // Check for existing assignments
+    const existingAssignments = await VoterAssignment.find({
+      subAdminId,
+      voterId: { $in: voterIds },
+      voterType,
+      isActive: true
+    });
+    
+    if (existingAssignments.length > 0) {
+      return res.status(409).json({
+        success: false,
+        message: 'Some voters are already assigned to this sub admin',
+        alreadyAssigned: existingAssignments.map(a => a.voterId)
+      });
+    }
+    
+    // Create assignments
+    const assignments = voterIds.map(voterId => ({
+      subAdminId,
+      voterId,
+      voterType,
+
+      notes: notes || null
+    }));
+    
+    const createdAssignments = await VoterAssignment.insertMany(assignments);
+    
+    res.status(201).json({
+      success: true,
+      message: `Successfully assigned ${createdAssignments.length} voters to sub admin`,
+      data: {
+        subAdminId,
+        assignedCount: createdAssignments.length,
+        assignments: createdAssignments
+      }
+    });
+  } catch (error) {
+    console.error('Assign voters error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error assigning voters',
+      error: error.message
+    });
+  }
+};
+
+
+
+
 // GET /api/assignment/voters - Get all voters with assignment status (Admin only)
 const getVotersWithAssignmentStatus = async (req, res) => {
   try {
@@ -427,6 +518,7 @@ const deleteAssignment = async (req, res) => {
 };
 
 module.exports = {
+  assignVotersToSubAdmin,
   getVotersWithAssignmentStatus,
   getAllAssignments,
   unassignVotersFromSubAdmin,
