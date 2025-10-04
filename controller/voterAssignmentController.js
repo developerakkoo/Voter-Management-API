@@ -45,40 +45,80 @@ const assignVotersToSubAdmin = async (req, res) => {
       });
     }
     
-    // Check for existing assignments
+    // Check for existing assignments and handle them appropriately
     const existingAssignments = await VoterAssignment.find({
       subAdminId,
       voterId: { $in: voterIds },
-      voterType,
-      isActive: true
+      voterType
     });
     
-    if (existingAssignments.length > 0) {
-      return res.status(409).json({
-        success: false,
-        message: 'Some voters are already assigned to this sub admin',
-        alreadyAssigned: existingAssignments.map(a => a.voterId)
+    const existingVoterIds = existingAssignments.map(a => a.voterId.toString());
+    const newVoterIds = voterIds.filter(id => !existingVoterIds.includes(id.toString()));
+    const assignmentsToUpdate = existingAssignments.filter(a => !a.isActive);
+    const assignmentsToReactivate = existingAssignments.filter(a => a.isActive);
+    
+    let createdAssignments = [];
+    let updatedAssignments = [];
+    
+    // Update inactive assignments to active
+    if (assignmentsToUpdate.length > 0) {
+      const updateResult = await VoterAssignment.updateMany(
+        {
+          _id: { $in: assignmentsToUpdate.map(a => a._id) }
+        },
+        {
+          $set: {
+            isActive: true,
+            notes: notes || null,
+            assignedAt: new Date()
+          }
+        }
+      );
+      updatedAssignments = await VoterAssignment.find({
+        _id: { $in: assignmentsToUpdate.map(a => a._id) }
       });
     }
     
-    // Create assignments
-    const assignments = voterIds.map(voterId => ({
-      subAdminId,
-      voterId,
-      voterType,
-
-      notes: notes || null
-    }));
+    // Create new assignments for voters that haven't been assigned before
+    if (newVoterIds.length > 0) {
+      const newAssignments = newVoterIds.map(voterId => ({
+        subAdminId,
+        voterId,
+        voterType,
+        notes: notes || null
+      }));
+      
+      createdAssignments = await VoterAssignment.insertMany(newAssignments);
+    }
     
-    const createdAssignments = await VoterAssignment.insertMany(assignments);
+    // Check if any voters are already actively assigned
+    if (assignmentsToReactivate.length > 0) {
+      const alreadyAssignedVoterIds = assignmentsToReactivate.map(a => a.voterId);
+      return res.status(409).json({
+        success: false,
+        message: 'Some voters are already actively assigned to this sub admin',
+        alreadyAssigned: alreadyAssignedVoterIds,
+        details: 'These voters are currently assigned. Please unassign them first if you want to reassign.',
+        partialSuccess: {
+          created: createdAssignments.length,
+          updated: updatedAssignments.length
+        }
+      });
+    }
+    
+    const allAssignments = [...createdAssignments, ...updatedAssignments];
     
     res.status(201).json({
       success: true,
-      message: `Successfully assigned ${createdAssignments.length} voters to sub admin`,
+      message: `Successfully assigned ${allAssignments.length} voters to sub admin`,
       data: {
         subAdminId,
-        assignedCount: createdAssignments.length,
-        assignments: createdAssignments
+        assignedCount: allAssignments.length,
+        assignments: allAssignments,
+        summary: {
+          newlyAssigned: createdAssignments.length,
+          reactivated: updatedAssignments.length
+        }
       }
     });
   } catch (error) {
