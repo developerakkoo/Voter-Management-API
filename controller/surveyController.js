@@ -57,7 +57,7 @@ const getAllSurveys = async (req, res) => {
     const [surveys, totalCount] = await Promise.all([
       Survey.find(filter)
         .populate('surveyorId', 'fullName userId pno')
-        .populate('voterId', 'Voter Name Eng Voter Name pno CardNo')
+        .populate('voterId', 'Voter Name Eng Voter Name pno CardNo CodeNo')
         .populate('verifiedBy', 'email')
         .sort(sortOptions)
         .skip(skip)
@@ -73,7 +73,7 @@ const getAllSurveys = async (req, res) => {
           if (member.voterId && member.voterType) {
             const VoterModel = member.voterType === 'Voter' ? Voter : VoterFour;
             const voterData = await VoterModel.findById(member.voterId)
-              .select('Voter Name Eng Voter Name pno CardNo')
+              .select('Voter Name Eng Voter Name pno CardNo CodeNo')
               .lean();
             member.voterId = voterData || member.voterId;
           }
@@ -122,7 +122,7 @@ const getSurveyById = async (req, res) => {
   try {
     const survey = await Survey.findById(req.params.id)
       .populate('surveyorId', 'fullName userId pno email phone')
-      .populate('voterId', 'Voter Name Eng Voter Name pno CardNo Address Sex Age')
+      .populate('voterId', 'Voter Name Eng Voter Name pno CardNo CodeNo Address Sex Age')
       .populate('verifiedBy', 'email')
       .lean();
 
@@ -139,7 +139,7 @@ const getSurveyById = async (req, res) => {
         if (member.voterId && member.voterType) {
           const VoterModel = member.voterType === 'Voter' ? Voter : VoterFour;
           const voterData = await VoterModel.findById(member.voterId)
-            .select('Voter Name Eng Voter Name pno CardNo Address Sex Age')
+            .select('Voter Name Eng Voter Name pno CardNo CodeNo Address Sex Age')
             .lean();
           member.voterId = voterData || member.voterId;
         }
@@ -722,7 +722,7 @@ const getSurveysBySurveyor = async (req, res) => {
 
     const [surveys, totalCount] = await Promise.all([
       Survey.find(filter)
-        .populate('voterId', 'Voter Name Eng Voter Name pno CardNo')
+        .populate('voterId', 'Voter Name Eng Voter Name pno CardNo CodeNo')
         .sort(sortOptions)
         .skip(skip)
         .limit(parseInt(limit))
@@ -737,7 +737,7 @@ const getSurveysBySurveyor = async (req, res) => {
           if (member.voterId && member.voterType) {
             const VoterModel = member.voterType === 'Voter' ? Voter : VoterFour;
             const voterData = await VoterModel.findById(member.voterId)
-              .select('Voter Name Eng Voter Name pno CardNo')
+              .select('Voter Name Eng Voter Name pno CardNo CodeNo')
               .lean();
             member.voterId = voterData || member.voterId;
           }
@@ -824,7 +824,7 @@ const getSurveysByVoter = async (req, res) => {
           if (member.voterId && member.voterType) {
             const VoterModel = member.voterType === 'Voter' ? Voter : VoterFour;
             const voterData = await VoterModel.findById(member.voterId)
-              .select('Voter Name Eng Voter Name pno CardNo')
+              .select('Voter Name Eng Voter Name pno CardNo CodeNo')
               .lean();
             member.voterId = voterData || member.voterId;
           }

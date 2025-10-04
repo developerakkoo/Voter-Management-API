@@ -677,11 +677,14 @@ const searchResults = await searchSurveys('9876543210', {
 - **verifiedBy**: Populated with admin email when applicable
 
 **Populated Fields in Response:**
+
+**For Voter Collection:**
 ```json
 {
   "voterId": {
     "_id": "68dd9aa890752b2d27b7ed84",
     "CardNo": "TBZ4771515",
+    "CodeNo": null,
     "pno": "3",
     "Voter Name Eng": "John Doe",
     "Sex": "Male",
@@ -693,7 +696,35 @@ const searchResults = await searchSurveys('9876543210', {
       "voterId": {
         "_id": "68dd9a8090752b2d27b779d1",
         "CardNo": "TBZ3900677",
+        "CodeNo": null,
         "pno": "3",
+        "Voter Name Eng": "Jane Doe"
+      }
+    }
+  ]
+}
+```
+
+**For VoterFour Collection:**
+```json
+{
+  "voterId": {
+    "_id": "68dd9c3533b43227162d3fc7",
+    "CardNo": null,
+    "CodeNo": "FGD1246370",
+    "pno": "4",
+    "Voter Name Eng": "John Doe",
+    "Sex": "Male",
+    "Age": 62
+  },
+  "members": [
+    {
+      "name": "Jane Doe",
+      "voterId": {
+        "_id": "68dd9c1e33b43227162cf352",
+        "CardNo": null,
+        "CodeNo": "FGD1246371",
+        "pno": "4",
         "Voter Name Eng": "Jane Doe"
       }
     }
