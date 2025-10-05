@@ -35,6 +35,9 @@ GET /api/survey/analytics/surveyors
       "surveyorName": "John Doe",
       "surveyorEmail": "john.doe@example.com",
       "totalSurveys": 150,
+      "submittedSurveys": 140,
+      "draftSurveys": 10,
+      "completionRate": 93.33,
       "todaySurveys": 8,
       "yesterdaySurveys": 12,
       "lastSurveyDate": "2024-01-15T14:30:00.000Z",
@@ -46,6 +49,9 @@ GET /api/survey/analytics/surveyors
       "surveyorName": "Jane Smith",
       "surveyorEmail": "jane.smith@example.com",
       "totalSurveys": 98,
+      "submittedSurveys": 85,
+      "draftSurveys": 13,
+      "completionRate": 86.73,
       "todaySurveys": 5,
       "yesterdaySurveys": 7,
       "lastSurveyDate": "2024-01-15T16:45:00.000Z",
@@ -56,8 +62,11 @@ GET /api/survey/analytics/surveyors
   "summary": {
     "totalSurveyors": 15,
     "totalSurveys": 1247,
+    "totalSubmittedSurveys": 1150,
+    "totalDraftSurveys": 97,
     "totalTodaySurveys": 45,
     "totalYesterdaySurveys": 52,
+    "overallCompletionRate": 92.22,
     "averageSurveysPerSurveyor": 83.13
   },
   "pagination": {
@@ -86,7 +95,10 @@ GET /api/survey/analytics/surveyors
 - `surveyorId` - Unique identifier for the surveyor
 - `surveyorName` - Display name of the surveyor (from User model)
 - `surveyorEmail` - Email address of the surveyor
-- `totalSurveys` - Total number of surveys completed by this surveyor
+- `totalSurveys` - Total number of surveys created by this surveyor
+- `submittedSurveys` - Number of surveys with 'submitted' status
+- `draftSurveys` - Number of surveys with 'draft' status
+- `completionRate` - Percentage of submitted surveys (submitted/total * 100)
 - `todaySurveys` - Number of surveys completed today (00:00:00 to 23:59:59)
 - `yesterdaySurveys` - Number of surveys completed yesterday
 - `lastSurveyDate` - Date and time of the most recent survey
@@ -96,8 +108,11 @@ GET /api/survey/analytics/surveyors
 ### Summary Fields
 - `totalSurveyors` - Total number of unique surveyors
 - `totalSurveys` - Total surveys across all surveyors
+- `totalSubmittedSurveys` - Total submitted surveys across all surveyors
+- `totalDraftSurveys` - Total draft surveys across all surveyors
 - `totalTodaySurveys` - Total surveys completed today by all surveyors
 - `totalYesterdaySurveys` - Total surveys completed yesterday by all surveyors
+- `overallCompletionRate` - Overall completion rate percentage (submitted/total * 100)
 - `averageSurveysPerSurveyor` - Average surveys per surveyor (rounded to 2 decimal places)
 
 ## Usage Examples
@@ -194,7 +209,7 @@ const SurveyorAnalytics = () => {
       const data = await response.json();
       
       if (data.success) {
-        setAnalytics(data);
+        setAnalytics(data);n
       } else {
         setError(data.message);
       }

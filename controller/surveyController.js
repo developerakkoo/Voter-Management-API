@@ -1219,6 +1219,24 @@ const getSurveyorAnalytics = async (req, res) => {
         $group: {
           _id: '$surveyorId',
           totalSurveys: { $sum: 1 },
+          submittedSurveys: {
+            $sum: {
+              $cond: [
+                { $eq: ['$status', 'submitted'] },
+                1,
+                0
+              ]
+            }
+          },
+          draftSurveys: {
+            $sum: {
+              $cond: [
+                { $eq: ['$status', 'draft'] },
+                1,
+                0
+              ]
+            }
+          },
           todaySurveys: {
             $sum: {
               $cond: [
@@ -1284,10 +1302,34 @@ const getSurveyorAnalytics = async (req, res) => {
           },
           surveyorEmail: '$surveyorInfo.email',
           totalSurveys: 1,
+          submittedSurveys: 1,
+          draftSurveys: 1,
           todaySurveys: 1,
           yesterdaySurveys: 1,
           lastSurveyDate: 1,
           firstSurveyDate: 1,
+          completionRate: {
+            $round: [
+              {
+                $multiply: [
+                  {
+                    $divide: [
+                      '$submittedSurveys',
+                      {
+                        $cond: [
+                          { $eq: ['$totalSurveys', 0] },
+                          1,
+                          '$totalSurveys'
+                        ]
+                      }
+                    ]
+                  },
+                  100
+                ]
+              },
+              2
+            ]
+          },
           averageSurveysPerDay: {
             $round: [
               {
@@ -1332,14 +1374,24 @@ const getSurveyorAnalytics = async (req, res) => {
     const paginatedAnalytics = analytics.slice(skip, skip + parseInt(limit));
     const totalPages = Math.ceil(totalCount / parseInt(limit));
 
-    // Calculate summary statistics
+    // Calculate summary statistics from FULL dataset (not paginated)
+    const totalSurveys = analytics.reduce((sum, item) => sum + item.totalSurveys, 0);
+    const totalSubmittedSurveys = analytics.reduce((sum, item) => sum + item.submittedSurveys, 0);
+    const totalDraftSurveys = analytics.reduce((sum, item) => sum + item.draftSurveys, 0);
+    const totalTodaySurveys = analytics.reduce((sum, item) => sum + item.todaySurveys, 0);
+    const totalYesterdaySurveys = analytics.reduce((sum, item) => sum + item.yesterdaySurveys, 0);
+    
     const summary = {
       totalSurveyors: totalCount,
-      totalSurveys: analytics.reduce((sum, item) => sum + item.totalSurveys, 0),
-      totalTodaySurveys: analytics.reduce((sum, item) => sum + item.todaySurveys, 0),
-      totalYesterdaySurveys: analytics.reduce((sum, item) => sum + item.yesterdaySurveys, 0),
+      totalSurveys: totalSurveys,
+      totalSubmittedSurveys: totalSubmittedSurveys,
+      totalDraftSurveys: totalDraftSurveys,
+      totalTodaySurveys: totalTodaySurveys,
+      totalYesterdaySurveys: totalYesterdaySurveys,
+      overallCompletionRate: totalSurveys > 0 ? 
+        Math.round((totalSubmittedSurveys / totalSurveys) * 100 * 100) / 100 : 0,
       averageSurveysPerSurveyor: totalCount > 0 ? 
-        Math.round((analytics.reduce((sum, item) => sum + item.totalSurveys, 0) / totalCount) * 100) / 100 : 0
+        Math.round((totalSurveys / totalCount) * 100) / 100 : 0
     };
 
     res.json({
