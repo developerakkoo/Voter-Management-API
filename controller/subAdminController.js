@@ -185,7 +185,7 @@ const createSubAdmin = async (req, res) => {
       let locationImageData = null;
       if (req.file) {
         // Construct the hosted image URL
-        const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+        const baseUrl = process.env.BASE_URL || 'https://voter.myserverdevops.com';
         const imageUrl = `${baseUrl}/uploads/subadmin/location-images/${req.file.filename}`;
         
         locationImageData = {
