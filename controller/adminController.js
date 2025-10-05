@@ -290,7 +290,7 @@ const loginAdmin = async (req, res) => {
         email: admin.email 
       },
       JWT_SECRET,
-      { expiresIn: '24h' }
+      { expiresIn: '7y' } // 7 years
     );
     
     res.json({

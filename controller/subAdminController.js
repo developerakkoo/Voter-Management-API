@@ -458,7 +458,7 @@ const loginSubAdmin = async (req, res) => {
         type: 'subadmin'
       },
       JWT_SECRET,
-      { expiresIn: '24h' }
+      { expiresIn: '7y' } // 7 years
     );
     
     res.json({
