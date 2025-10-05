@@ -1175,6 +1175,197 @@ const getSurveyMapStats = async (req, res) => {
   }
 };
 
+// GET /api/survey/analytics/surveyors - Get surveyor analytics
+const getSurveyorAnalytics = async (req, res) => {
+  try {
+    const { 
+      page = 1, 
+      limit = 20, 
+      dateFrom, 
+      dateTo,
+      sortBy = 'totalSurveys',
+      sortOrder = 'desc'
+    } = req.query;
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Date range setup
+    let dateFilter = {};
+    if (dateFrom || dateTo) {
+      dateFilter.createdAt = {};
+      if (dateFrom) dateFilter.createdAt.$gte = new Date(dateFrom);
+      if (dateTo) dateFilter.createdAt.$lte = new Date(dateTo);
+    }
+
+    // Get today's date range
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(today);
+    todayEnd.setHours(23, 59, 59, 999);
+
+    // Get yesterday's date range
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayEnd = new Date(yesterday);
+    yesterdayEnd.setHours(23, 59, 59, 999);
+
+    // Aggregate pipeline to get surveyor analytics
+    const pipeline = [
+      // Match surveys within date range if specified
+      ...(Object.keys(dateFilter).length > 0 ? [{ $match: dateFilter }] : []),
+      
+      // Group by surveyorId
+      {
+        $group: {
+          _id: '$surveyorId',
+          totalSurveys: { $sum: 1 },
+          todaySurveys: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $gte: ['$createdAt', today] },
+                    { $lte: ['$createdAt', todayEnd] }
+                  ]
+                },
+                1,
+                0
+              ]
+            }
+          },
+          yesterdaySurveys: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $gte: ['$createdAt', yesterday] },
+                    { $lte: ['$createdAt', yesterdayEnd] }
+                  ]
+                },
+                1,
+                0
+              ]
+            }
+          },
+          lastSurveyDate: { $max: '$createdAt' },
+          firstSurveyDate: { $min: '$createdAt' }
+        }
+      },
+      
+      // Lookup surveyor information
+      {
+        $lookup: {
+          from: 'users',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'surveyorInfo'
+        }
+      },
+      
+      // Unwind surveyor info
+      {
+        $unwind: {
+          path: '$surveyorInfo',
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      
+      // Project the final structure
+      {
+        $project: {
+          _id: 0,
+          surveyorId: '$_id',
+          surveyorName: {
+            $cond: {
+              if: { $ne: ['$surveyorInfo.name', null] },
+              then: '$surveyorInfo.name',
+              else: 'Unknown Surveyor'
+            }
+          },
+          surveyorEmail: '$surveyorInfo.email',
+          totalSurveys: 1,
+          todaySurveys: 1,
+          yesterdaySurveys: 1,
+          lastSurveyDate: 1,
+          firstSurveyDate: 1,
+          averageSurveysPerDay: {
+            $round: [
+              {
+                $divide: [
+                  '$totalSurveys',
+                  {
+                    $max: [
+                      1,
+                      {
+                        $divide: [
+                          { $subtract: ['$lastSurveyDate', '$firstSurveyDate'] },
+                          86400000 // milliseconds in a day
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              2
+            ]
+          }
+        }
+      }
+    ];
+
+    // Execute aggregation
+    const analytics = await Survey.aggregate(pipeline);
+
+    // Sort results
+    analytics.sort((a, b) => {
+      const aValue = a[sortBy];
+      const bValue = b[sortBy];
+      const multiplier = sortOrder === 'desc' ? -1 : 1;
+      
+      if (aValue < bValue) return -1 * multiplier;
+      if (aValue > bValue) return 1 * multiplier;
+      return 0;
+    });
+
+    // Apply pagination
+    const totalCount = analytics.length;
+    const paginatedAnalytics = analytics.slice(skip, skip + parseInt(limit));
+    const totalPages = Math.ceil(totalCount / parseInt(limit));
+
+    // Calculate summary statistics
+    const summary = {
+      totalSurveyors: totalCount,
+      totalSurveys: analytics.reduce((sum, item) => sum + item.totalSurveys, 0),
+      totalTodaySurveys: analytics.reduce((sum, item) => sum + item.todaySurveys, 0),
+      totalYesterdaySurveys: analytics.reduce((sum, item) => sum + item.yesterdaySurveys, 0),
+      averageSurveysPerSurveyor: totalCount > 0 ? 
+        Math.round((analytics.reduce((sum, item) => sum + item.totalSurveys, 0) / totalCount) * 100) / 100 : 0
+    };
+
+    res.json({
+      success: true,
+      data: paginatedAnalytics,
+      summary,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages,
+        totalCount,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+        limit: parseInt(limit)
+      }
+    });
+
+  } catch (error) {
+    console.error('Get surveyor analytics error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching surveyor analytics',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getAllSurveys,
   getSurveyById,
@@ -1189,5 +1380,6 @@ module.exports = {
   getSurveysByVoter,
   getAvailableVoters,
   getSurveyMapData,
-  getSurveyMapStats
+  getSurveyMapStats,
+  getSurveyorAnalytics
 };

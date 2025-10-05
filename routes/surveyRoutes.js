@@ -14,7 +14,8 @@ const {
   getSurveysByVoter,
   getAvailableVoters,
   getSurveyMapData,
-  getSurveyMapStats
+  getSurveyMapStats,
+  getSurveyorAnalytics
 } = require('../controller/surveyController');
 
 // GET /api/survey/stats - Get survey statistics
@@ -25,6 +26,9 @@ router.get('/map-data', getSurveyMapData);
 
 // GET /api/survey/map-data/stats - Get survey statistics for map data
 router.get('/map-data/stats', getSurveyMapStats);
+
+// GET /api/survey/analytics/surveyors - Get surveyor analytics
+router.get('/analytics/surveyors', getSurveyorAnalytics);
 
 // GET /api/survey/available-voters - Get available voters for testing
 router.get('/available-voters', getAvailableVoters);
