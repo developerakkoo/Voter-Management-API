@@ -22,6 +22,7 @@ const categoryRoutes = require('./routes/categoryRoutes');
 const combinedVotersRoutes = require('./routes/combinedVotersRoutes');
 const userRoutes = require('./routes/userRoutes');
 const surveyRoutes = require('./routes/surveyRoutes');
+const { testAuth } = require('./test-auth');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -106,6 +107,9 @@ app.use('/api/voters', combinedVotersRoutes);
 // User routes
 app.use('/api/user', userRoutes);
 app.use('/api/survey', surveyRoutes);
+
+// Test authentication endpoint (for debugging)
+app.get('/api/test-auth', testAuth);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
