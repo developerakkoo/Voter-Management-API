@@ -202,20 +202,7 @@ const updateAssignedVoterPaidStatus = async (req, res) => {
     const subAdminObjectId = new mongoose.Types.ObjectId(subAdminId);
     const voterObjectId = new mongoose.Types.ObjectId(voterId);
     
-    // Check if voter is assigned to this sub admin
-    const assignment = await VoterAssignment.findOne({
-      subAdminId: subAdminObjectId,
-      voterId: voterObjectId,
-      voterType,
-      isActive: true
-    });
-    
-    if (!assignment) {
-      return res.status(404).json({
-        success: false,
-        message: 'Voter not found or not assigned to you'
-      });
-    }
+ 
     
     if (typeof isPaid !== 'boolean') {
       return res.status(400).json({
@@ -275,20 +262,7 @@ const updateAssignedVoterVisitedStatus = async (req, res) => {
     const subAdminObjectId = new mongoose.Types.ObjectId(subAdminId);
     const voterObjectId = new mongoose.Types.ObjectId(voterId);
     
-    // Check if voter is assigned to this sub admin
-    const assignment = await VoterAssignment.findOne({
-      subAdminId: subAdminObjectId,
-      voterId: voterObjectId,
-      voterType,
-      isActive: true
-    });
-    
-    if (!assignment) {
-      return res.status(404).json({
-        success: false,
-        message: 'Voter not found or not assigned to you'
-      });
-    }
+
     
     if (typeof isVisited !== 'boolean') {
       return res.status(400).json({
