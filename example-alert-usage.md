@@ -58,12 +58,14 @@ GET /api/alert/published?targetAudience=voters&priority=high&search=urgent&page=
 GET /api/alert/stats
 ```
 
-### 2. Admin/SubAdmin Endpoints (Authentication Required)
+### 2. SubAdmin Endpoints (SubAdmin Authentication Required)
+
+**Important**: All protected alert endpoints now require **SubAdmin authentication only**. Admin tokens are no longer accepted for alert operations.
 
 #### Get All Alerts
 ```bash
 GET /api/alert
-Authorization: Bearer JWT_TOKEN
+Authorization: Bearer SUBADMIN_JWT_TOKEN
 ```
 
 **Query Parameters:**
@@ -86,7 +88,7 @@ GET /api/alert/:id
 #### Create Alert
 ```bash
 POST /api/alert
-Authorization: Bearer JWT_TOKEN
+Authorization: Bearer SUBADMIN_JWT_TOKEN
 Content-Type: application/json
 
 {
@@ -111,7 +113,7 @@ Content-Type: application/json
 #### Update Alert
 ```bash
 PUT /api/alert/:id
-Authorization: Bearer JWT_TOKEN
+Authorization: Bearer SUBADMIN_JWT_TOKEN
 Content-Type: application/json
 
 {
@@ -125,13 +127,13 @@ Content-Type: application/json
 #### Delete Alert
 ```bash
 DELETE /api/alert/:id
-Authorization: Bearer JWT_TOKEN
+Authorization: Bearer SUBADMIN_JWT_TOKEN
 ```
 
 #### Delete All Alerts (Admin Only)
 ```bash
 DELETE /api/alert
-Authorization: Bearer ADMIN_JWT_TOKEN
+Authorization: Bearer SUBADMIN_JWT_TOKEN
 ```
 
 ### 3. Image Management
@@ -139,7 +141,7 @@ Authorization: Bearer ADMIN_JWT_TOKEN
 #### Upload Images to Alert
 ```bash
 POST /api/alert/:id/images
-Authorization: Bearer JWT_TOKEN
+Authorization: Bearer SUBADMIN_JWT_TOKEN
 Content-Type: multipart/form-data
 
 Form Data:
@@ -154,7 +156,49 @@ Form Data:
 #### Delete Specific Image
 ```bash
 DELETE /api/alert/:id/images/:imageId
-Authorization: Bearer JWT_TOKEN
+Authorization: Bearer SUBADMIN_JWT_TOKEN
+```
+
+#### Image Upload Response Example
+```json
+{
+  "success": true,
+  "message": "Successfully uploaded 3 images",
+  "data": {
+    "alertId": "64f8a1b2c3d4e5f6a7b8c9d0",
+    "images": [
+      {
+        "filename": "alert-1759650040123-456789.jpg",
+        "originalName": "election-photo1.jpg",
+        "path": "./uploads/alerts/alert-1759650040123-456789.jpg",
+        "size": 1024000,
+        "mimetype": "image/jpeg",
+        "uploadedAt": "2024-01-15T10:30:00.000Z"
+      },
+      {
+        "filename": "alert-1759650040124-456790.png",
+        "originalName": "candidate-info.png",
+        "path": "./uploads/alerts/alert-1759650040124-456790.png",
+        "size": 2048000,
+        "mimetype": "image/png",
+        "uploadedAt": "2024-01-15T10:30:01.000Z"
+      }
+    ],
+    "totalImages": 3
+  }
+}
+```
+
+#### Image Delete Response Example
+```json
+{
+  "success": true,
+  "message": "Image deleted successfully",
+  "data": {
+    "alertId": "64f8a1b2c3d4e5f6a7b8c9d0",
+    "remainingImages": 2
+  }
+}
 ```
 
 ### 4. Publishing Management
@@ -162,13 +206,13 @@ Authorization: Bearer JWT_TOKEN
 #### Publish Alert
 ```bash
 PATCH /api/alert/:id/publish
-Authorization: Bearer JWT_TOKEN
+Authorization: Bearer SUBADMIN_JWT_TOKEN
 ```
 
 #### Unpublish Alert
 ```bash
 PATCH /api/alert/:id/unpublish
-Authorization: Bearer JWT_TOKEN
+Authorization: Bearer SUBADMIN_JWT_TOKEN
 ```
 
 ## Example Usage Scenarios
@@ -284,12 +328,49 @@ GET /api/alert/stats
 
 ## Advanced Features
 
-### 1. Image Management
-- **Multiple Upload**: Upload up to 10 images per alert
-- **Image Metadata**: Track filename, size, type, upload date
-- **File Validation**: Only image files allowed (JPEG, PNG, GIF, WebP)
-- **Size Limits**: 5MB per image, 10 images maximum
-- **Automatic Cleanup**: Images deleted when alert is deleted
+### 1. Comprehensive Image Management
+
+#### **Multiple Image Upload**
+- Upload up to **10 images per alert** in a single request
+- Support for **multiple file types** in one upload session
+- **Batch processing** for efficient handling of multiple files
+
+#### **Image File Support**
+- **Supported Formats**: JPEG, JPG, PNG, GIF, WebP
+- **File Size Limit**: Maximum 5MB per image
+- **Total Images**: Maximum 10 images per alert
+- **File Validation**: Automatic validation of file type and size
+
+#### **Image Metadata Tracking**
+- **Unique Filename**: Auto-generated unique filenames with timestamps
+- **Original Name**: Preserves original filename for reference
+- **File Path**: Complete file system path for serving images
+- **File Size**: Tracks file size in bytes
+- **MIME Type**: Records file MIME type
+- **Upload Timestamp**: Records when image was uploaded
+
+#### **File Storage**
+- **Storage Location**: `./uploads/alerts/` directory
+- **File Naming**: `alert-{timestamp}-{random}.{extension}` format
+- **Directory Creation**: Automatic directory creation if not exists
+- **File Organization**: Organized by alert creation date
+
+#### **Image Operations**
+- **Upload Images**: `POST /api/alert/:id/images`
+- **Delete Specific Image**: `DELETE /api/alert/:id/images/:imageId`
+- **View All Images**: Included in alert GET responses
+- **Image Count**: Virtual field `imageCount` for easy access
+
+#### **Error Handling**
+- **File Type Validation**: Rejects non-image files
+- **Size Validation**: Rejects files exceeding 5MB
+- **Upload Limits**: Prevents exceeding 10 images per alert
+- **File System Errors**: Handles disk space and permission issues
+
+#### **Automatic Cleanup**
+- **Alert Deletion**: All images automatically deleted when alert is deleted
+- **Image Deletion**: Physical files removed from disk when image is deleted
+- **Orphaned File Prevention**: No orphaned files left on server
 
 ### 2. Link Management
 - **URL Validation**: Validates HTTP/HTTPS URLs
@@ -341,6 +422,229 @@ GET /api/alert/stats
 - **404 Not Found**: Alert or image not found
 - **413 Payload Too Large**: File too large
 - **500 Internal Server Error**: Database or server errors
+
+## Image Upload Usage Examples
+
+### 1. Frontend Implementation (JavaScript/TypeScript)
+
+#### **Upload Images with Progress**
+```javascript
+// Upload multiple images to an alert
+async function uploadAlertImages(alertId, imageFiles) {
+  const formData = new FormData();
+  
+  // Add multiple image files
+  imageFiles.forEach((file, index) => {
+    formData.append('images', file);
+  });
+  
+  try {
+    const response = await fetch(`/api/alert/${alertId}/images`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${subAdminToken}`
+        // Don't set Content-Type for FormData - browser sets it automatically
+      },
+      body: formData
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      console.log(`Uploaded ${result.data.images.length} images`);
+      console.log('Total images in alert:', result.data.totalImages);
+      return result.data;
+    } else {
+      throw new Error(result.message);
+    }
+  } catch (error) {
+    console.error('Upload failed:', error);
+    throw error;
+  }
+}
+
+// Usage example
+const imageFiles = document.getElementById('imageInput').files;
+uploadAlertImages('64f8a1b2c3d4e5f6a7b8c9d0', imageFiles);
+```
+
+#### **Delete Specific Image**
+```javascript
+async function deleteAlertImage(alertId, imageId) {
+  try {
+    const response = await fetch(`/api/alert/${alertId}/images/${imageId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${subAdminToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      console.log('Image deleted successfully');
+      console.log('Remaining images:', result.data.remainingImages);
+    } else {
+      throw new Error(result.message);
+    }
+  } catch (error) {
+    console.error('Delete failed:', error);
+    throw error;
+  }
+}
+```
+
+### 2. cURL Examples
+
+#### **Upload Images**
+```bash
+# Upload multiple images to an alert
+curl -X POST https://voter.myserverdevops.com/api/alert/64f8a1b2c3d4e5f6a7b8c9d0/images \
+  -H "Authorization: Bearer SUBADMIN_JWT_TOKEN" \
+  -F "images=@/path/to/image1.jpg" \
+  -F "images=@/path/to/image2.png" \
+  -F "images=@/path/to/image3.gif"
+```
+
+#### **Delete Image**
+```bash
+# Delete specific image from alert
+curl -X DELETE https://voter.myserverdevops.com/api/alert/64f8a1b2c3d4e5f6a7b8c9d0/images/64f8a1b2c3d4e5f6a7b8c9d1 \
+  -H "Authorization: Bearer SUBADMIN_JWT_TOKEN"
+```
+
+### 3. React/Next.js Implementation
+
+#### **Image Upload Component**
+```jsx
+import React, { useState } from 'react';
+
+const ImageUpload = ({ alertId, onUpload }) => {
+  const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
+
+  const handleFileUpload = async (event) => {
+    const files = Array.from(event.target.files);
+    
+    if (files.length === 0) return;
+    if (files.length > 10) {
+      alert('Maximum 10 images allowed');
+      return;
+    }
+
+    // Validate file types and sizes
+    const validFiles = files.filter(file => {
+      const isValidType = /\.(jpg|jpeg|png|gif|webp)$/i.test(file.name);
+      const isValidSize = file.size <= 5 * 1024 * 1024; // 5MB
+      
+      if (!isValidType) alert(`${file.name} is not a valid image type`);
+      if (!isValidSize) alert(`${file.name} is too large (max 5MB)`);
+      
+      return isValidType && isValidSize;
+    });
+
+    if (validFiles.length === 0) return;
+
+    setUploading(true);
+    setProgress(0);
+
+    try {
+      const formData = new FormData();
+      validFiles.forEach(file => {
+        formData.append('images', file);
+      });
+
+      const response = await fetch(`/api/alert/${alertId}/images`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('subAdminToken')}`
+        },
+        body: formData
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setProgress(100);
+        onUpload(result.data);
+        alert(`Successfully uploaded ${result.data.images.length} images`);
+      } else {
+        throw new Error(result.message);
+      }
+    } catch (error) {
+      alert(`Upload failed: ${error.message}`);
+    } finally {
+      setUploading(false);
+      setProgress(0);
+    }
+  };
+
+  return (
+    <div className="image-upload">
+      <input
+        type="file"
+        multiple
+        accept="image/*"
+        onChange={handleFileUpload}
+        disabled={uploading}
+      />
+      
+      {uploading && (
+        <div className="progress-bar">
+          <div 
+            className="progress-fill" 
+            style={{ width: `${progress}%` }}
+          />
+          <span>Uploading... {progress}%</span>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default ImageUpload;
+```
+
+### 4. Error Handling Examples
+
+#### **Handle Upload Errors**
+```javascript
+const handleImageUpload = async (alertId, files) => {
+  try {
+    const formData = new FormData();
+    files.forEach(file => formData.append('images', file));
+
+    const response = await fetch(`/api/alert/${alertId}/images`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      
+      switch (response.status) {
+        case 400:
+          throw new Error(`Upload error: ${error.message}`);
+        case 401:
+          throw new Error('Authentication required - please login again');
+        case 413:
+          throw new Error('File too large - maximum 5MB per image');
+        case 404:
+          throw new Error('Alert not found');
+        default:
+          throw new Error(`Upload failed: ${error.message}`);
+      }
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Image upload error:', error);
+    throw error;
+  }
+};
+```
 
 ## Use Cases
 

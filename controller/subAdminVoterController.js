@@ -81,10 +81,15 @@ const getAssignedVoter = async (req, res) => {
     const { voterId, voterType } = req.params;
     const subAdminId = req.subAdminId;
     
+    // Convert string IDs to ObjectIds
+    const mongoose = require('mongoose');
+    const subAdminObjectId = new mongoose.Types.ObjectId(subAdminId);
+    const voterObjectId = new mongoose.Types.ObjectId(voterId);
+    
     // Check if voter is assigned to this sub admin
     const assignment = await VoterAssignment.findOne({
-      subAdminId,
-      voterId,
+      subAdminId: subAdminObjectId,
+      voterId: voterObjectId,
       voterType,
       isActive: true
     }).populate('voterId');
@@ -117,10 +122,15 @@ const updateAssignedVoter = async (req, res) => {
     const subAdminId = req.subAdminId;
     const updateData = req.body;
     
+    // Convert string IDs to ObjectIds
+    const mongoose = require('mongoose');
+    const subAdminObjectId = new mongoose.Types.ObjectId(subAdminId);
+    const voterObjectId = new mongoose.Types.ObjectId(voterId);
+    
     // Check if voter is assigned to this sub admin
     const assignment = await VoterAssignment.findOne({
-      subAdminId,
-      voterId,
+      subAdminId: subAdminObjectId,
+      voterId: voterObjectId,
       voterType,
       isActive: true
     });
@@ -144,7 +154,7 @@ const updateAssignedVoter = async (req, res) => {
     updateData.lastUpdated = new Date();
     
     const updatedVoter = await VoterModel.findByIdAndUpdate(
-      voterId,
+      voterObjectId,
       updateData,
       { new: true, runValidators: true }
     );
@@ -187,10 +197,15 @@ const updateAssignedVoterPaidStatus = async (req, res) => {
     const subAdminId = req.subAdminId;
     const { isPaid } = req.body;
     
+    // Convert string IDs to ObjectIds
+    const mongoose = require('mongoose');
+    const subAdminObjectId = new mongoose.Types.ObjectId(subAdminId);
+    const voterObjectId = new mongoose.Types.ObjectId(voterId);
+    
     // Check if voter is assigned to this sub admin
     const assignment = await VoterAssignment.findOne({
-      subAdminId,
-      voterId,
+      subAdminId: subAdminObjectId,
+      voterId: voterObjectId,
       voterType,
       isActive: true
     });
@@ -213,13 +228,20 @@ const updateAssignedVoterPaidStatus = async (req, res) => {
     const VoterModel = voterType === 'Voter' ? Voter : VoterFour;
     
     const voter = await VoterModel.findByIdAndUpdate(
-      voterId,
+      voterObjectId,
       { 
         isPaid,
         lastUpdated: new Date()
       },
       { new: true, runValidators: true }
     );
+    
+    if (!voter) {
+      return res.status(404).json({
+        success: false,
+        message: 'Voter record not found in database'
+      });
+    }
     
     res.json({
       success: true,
@@ -248,10 +270,15 @@ const updateAssignedVoterVisitedStatus = async (req, res) => {
     const subAdminId = req.subAdminId;
     const { isVisited } = req.body;
     
+    // Convert string IDs to ObjectIds
+    const mongoose = require('mongoose');
+    const subAdminObjectId = new mongoose.Types.ObjectId(subAdminId);
+    const voterObjectId = new mongoose.Types.ObjectId(voterId);
+    
     // Check if voter is assigned to this sub admin
     const assignment = await VoterAssignment.findOne({
-      subAdminId,
-      voterId,
+      subAdminId: subAdminObjectId,
+      voterId: voterObjectId,
       voterType,
       isActive: true
     });
@@ -274,13 +301,20 @@ const updateAssignedVoterVisitedStatus = async (req, res) => {
     const VoterModel = voterType === 'Voter' ? Voter : VoterFour;
     
     const voter = await VoterModel.findByIdAndUpdate(
-      voterId,
+      voterObjectId,
       { 
         isVisited,
         lastUpdated: new Date()
       },
       { new: true, runValidators: true }
     );
+    
+    if (!voter) {
+      return res.status(404).json({
+        success: false,
+        message: 'Voter record not found in database'
+      });
+    }
     
     res.json({
       success: true,
@@ -309,10 +343,15 @@ const updateAssignedVoterStatus = async (req, res) => {
     const subAdminId = req.subAdminId;
     const { isPaid, isVisited } = req.body;
     
+    // Convert string IDs to ObjectIds
+    const mongoose = require('mongoose');
+    const subAdminObjectId = new mongoose.Types.ObjectId(subAdminId);
+    const voterObjectId = new mongoose.Types.ObjectId(voterId);
+    
     // Check if voter is assigned to this sub admin
     const assignment = await VoterAssignment.findOne({
-      subAdminId,
-      voterId,
+      subAdminId: subAdminObjectId,
+      voterId: voterObjectId,
       voterType,
       isActive: true
     });
@@ -345,10 +384,17 @@ const updateAssignedVoterStatus = async (req, res) => {
     const VoterModel = voterType === 'Voter' ? Voter : VoterFour;
     
     const voter = await VoterModel.findByIdAndUpdate(
-      voterId,
+      voterObjectId,
       updateData,
       { new: true, runValidators: true }
     );
+    
+    if (!voter) {
+      return res.status(404).json({
+        success: false,
+        message: 'Voter record not found in database'
+      });
+    }
     
     res.json({
       success: true,
