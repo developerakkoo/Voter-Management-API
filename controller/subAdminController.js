@@ -483,7 +483,14 @@ const loginSubAdmin = async (req, res) => {
 const getAssignedVoters = async (req, res) => {
   try {
     const { id } = req.params;
-    const { page = 1, limit = 20, voterType, sortBy = 'assignedAt', sortOrder = 'desc' } = req.query;
+    const { 
+      page = 1, 
+      limit = 20, 
+      voterType, 
+      sortBy = 'assignedAt', 
+      sortOrder = 'desc',
+      search // Add search parameter
+    } = req.query;
     
     const skip = (parseInt(page) - 1) * parseInt(limit);
     
@@ -495,21 +502,103 @@ const getAssignedVoters = async (req, res) => {
     const sortOptions = {};
     sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
     
-    const [assignments, totalCount] = await Promise.all([
-      VoterAssignment.find(filter)
-        .populate('voterId')
-        .sort(sortOptions)
-        .skip(skip)
-        .limit(parseInt(limit))
-        .lean(),
-      VoterAssignment.countDocuments(filter)
-    ]);
+    // Get assignments first
+    const assignments = await VoterAssignment.find(filter)
+      .sort(sortOptions)
+      .skip(skip)
+      .limit(parseInt(limit))
+      .lean();
+    
+    // Get voter information separately
+    const voterIds = assignments.map(a => a.voterId);
+    const assignmentVoterType = voterType || (assignments.length > 0 ? assignments[0].voterType : 'Voter');
+    
+    let voterInfo = {};
+    let filteredAssignments = assignments;
+    
+    if (voterIds.length > 0) {
+      const VoterModel = assignmentVoterType === 'Voter' ? Voter : VoterFour;
+      
+      // Build search filter for voters
+      let voterFilter = { _id: { $in: voterIds } };
+      
+      // Add search functionality
+      if (search) {
+        voterFilter.$or = [
+          { 'Voter Name Eng': { $regex: search, $options: 'i' } },
+          { 'Voter Name': { $regex: search, $options: 'i' } },
+          { 'Relative Name Eng': { $regex: search, $options: 'i' } },
+          { 'Relative Name': { $regex: search, $options: 'i' } },
+          { Address: { $regex: search, $options: 'i' } },
+          { 'Address Eng': { $regex: search, $options: 'i' } },
+          { CardNo: { $regex: search, $options: 'i' } },
+          { pno: { $regex: search, $options: 'i' } },
+          { CodeNo: { $regex: search, $options: 'i' } }
+        ];
+      }
+      
+      const voters = await VoterModel.find(voterFilter).lean();
+      
+      // Create a lookup map for voter information
+      voters.forEach(voter => {
+        voterInfo[voter._id.toString()] = voter;
+      });
+      
+      // Filter assignments based on search results
+      if (search) {
+        filteredAssignments = assignments.filter(assignment => 
+          voterInfo[assignment.voterId.toString()]
+        );
+      }
+    }
+    
+    // Get total count with search filter applied
+    let totalCount = assignments.length;
+    if (search) {
+      // Recalculate total count with search filter
+      const allAssignments = await VoterAssignment.find({ subAdminId: id, isActive: true }).lean();
+      const allVoterIds = allAssignments.map(a => a.voterId);
+      
+      if (allVoterIds.length > 0) {
+        const VoterModel = assignmentVoterType === 'Voter' ? Voter : VoterFour;
+        let voterFilter = { _id: { $in: allVoterIds } };
+        
+        if (search) {
+          voterFilter.$or = [
+            { 'Voter Name Eng': { $regex: search, $options: 'i' } },
+            { 'Voter Name': { $regex: search, $options: 'i' } },
+            { 'Relative Name Eng': { $regex: search, $options: 'i' } },
+            { 'Relative Name': { $regex: search, $options: 'i' } },
+            { Address: { $regex: search, $options: 'i' } },
+            { 'Address Eng': { $regex: search, $options: 'i' } },
+            { CardNo: { $regex: search, $options: 'i' } },
+            { pno: { $regex: search, $options: 'i' } },
+            { CodeNo: { $regex: search, $options: 'i' } }
+          ];
+        }
+        
+        const matchingVoters = await VoterModel.find(voterFilter).lean();
+        const matchingVoterIds = new Set(matchingVoters.map(v => v._id.toString()));
+        
+        totalCount = allAssignments.filter(assignment => 
+          matchingVoterIds.has(assignment.voterId.toString())
+        ).length;
+      }
+    } else {
+      totalCount = await VoterAssignment.countDocuments(filter);
+    }
+    
+    // Add voter information to assignments
+    const assignmentsWithVoterInfo = filteredAssignments.map(assignment => ({
+      ...assignment,
+      voterInfo: voterInfo[assignment.voterId.toString()] || null
+    }));
     
     const totalPages = Math.ceil(totalCount / parseInt(limit));
     
     res.json({
       success: true,
-      data: assignments,
+      data: assignmentsWithVoterInfo,
       pagination: {
         currentPage: parseInt(page),
         totalPages,
@@ -517,7 +606,8 @@ const getAssignedVoters = async (req, res) => {
         hasNextPage: page < totalPages,
         hasPrevPage: page > 1,
         limit: parseInt(limit)
-      }
+      },
+      search: search || null
     });
   } catch (error) {
     console.error('Get assigned voters error:', error);
