@@ -34,6 +34,7 @@ GET /api/survey/analytics/surveyors
       "surveyorId": "64f8a1b2c3d4e5f6a7b8c9d0",
       "surveyorName": "John Doe",
       "surveyorEmail": "john.doe@example.com",
+      "surveyorExists": true,
       "totalSurveys": 150,
       "submittedSurveys": 140,
       "draftSurveys": 10,
@@ -48,6 +49,7 @@ GET /api/survey/analytics/surveyors
       "surveyorId": "64f8a1b2c3d4e5f6a7b8c9d1",
       "surveyorName": "Jane Smith",
       "surveyorEmail": "jane.smith@example.com",
+      "surveyorExists": true,
       "totalSurveys": 98,
       "submittedSurveys": 85,
       "draftSurveys": 13,
@@ -57,10 +59,27 @@ GET /api/survey/analytics/surveyors
       "lastSurveyDate": "2024-01-15T16:45:00.000Z",
       "firstSurveyDate": "2024-01-05T08:30:00.000Z",
       "averageSurveysPerDay": 9.8
+    },
+    {
+      "surveyorId": "68deeff4c2cbbe75f28d17f2",
+      "surveyorName": "Unknown Surveyor (ID: 68deeff4c2cbbe75f28d17f2)",
+      "surveyorEmail": "No email found",
+      "surveyorExists": false,
+      "totalSurveys": 4,
+      "submittedSurveys": 0,
+      "draftSurveys": 0,
+      "completionRate": 0,
+      "todaySurveys": 0,
+      "yesterdaySurveys": 0,
+      "lastSurveyDate": "2025-10-03T08:34:02.960Z",
+      "firstSurveyDate": "2025-10-03T07:07:02.377Z",
+      "averageSurveysPerDay": 4
     }
   ],
   "summary": {
     "totalSurveyors": 15,
+    "existingSurveyors": 14,
+    "missingSurveyors": 1,
     "totalSurveys": 1247,
     "totalSubmittedSurveys": 1150,
     "totalDraftSurveys": 97,
@@ -93,8 +112,9 @@ GET /api/survey/analytics/surveyors
 
 ### Surveyor Data Fields
 - `surveyorId` - Unique identifier for the surveyor
-- `surveyorName` - Display name of the surveyor (from User model)
-- `surveyorEmail` - Email address of the surveyor
+- `surveyorName` - Display name of the surveyor (from User model) or "Unknown Surveyor (ID: xxx)" if not found
+- `surveyorEmail` - Email address of the surveyor or "No email found" if surveyor doesn't exist
+- `surveyorExists` - Boolean indicating if the surveyor exists in the User collection
 - `totalSurveys` - Total number of surveys created by this surveyor
 - `submittedSurveys` - Number of surveys with 'submitted' status
 - `draftSurveys` - Number of surveys with 'draft' status
@@ -107,6 +127,8 @@ GET /api/survey/analytics/surveyors
 
 ### Summary Fields
 - `totalSurveyors` - Total number of unique surveyors
+- `existingSurveyors` - Number of surveyors that exist in User collection
+- `missingSurveyors` - Number of surveyors that don't exist in User collection (orphaned references)
 - `totalSurveys` - Total surveys across all surveyors
 - `totalSubmittedSurveys` - Total submitted surveys across all surveyors
 - `totalDraftSurveys` - Total draft surveys across all surveyors

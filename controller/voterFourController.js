@@ -1,5 +1,4 @@
 const VoterFour = require('../models/VoterFour');
-
 // GET /api/voterfour - Get all VoterFour records with pagination, filtering, and search
 const getAllVoterFour = async (req, res) => {
   try {
@@ -423,7 +422,92 @@ const getVoterFourStats = async (req, res) => {
   }
 };
 
-// GET /api/voterfour/search - Search VoterFour by Voter Name Eng
+// routes/searchVoterFour.js
+// const VoterFour = require("../models/VoterFour");
+
+// --- helpers ---------------------------------------------------
+const normTokens = (q = "") =>
+  q.replace(/[^A-Za-z\s]+/g, " ")
+   .replace(/\s+/g, " ")
+   .trim()
+   .split(" ")
+   .filter(Boolean)
+   .map((s) => s.toLowerCase());
+
+function buildCompound(qRaw, { nameOnly = false } = {}) {
+  const tokens = normTokens(qRaw);
+  const must = [];
+  const should = [];
+  const filter = [];
+
+  // 1) MUST: each token present as a prefix in name/relative (order-agnostic)
+  tokens.forEach((t) => {
+    const perToken = [
+      { autocomplete: { path: "Voter Name Eng", query: t, fuzzy: { maxEdits: 1, prefixLength: 1 } } },
+      ...(nameOnly ? [] : [
+        { autocomplete: { path: "Relative Name Eng", query: t, fuzzy: { maxEdits: 1, prefixLength: 1 } } },
+      ]),
+    ];
+    must.push({ compound: { should: perToken, minimumShouldMatch: 1 } });
+
+    // single-letter fallback (since minGrams=2)
+    if (t.length === 1) {
+      must.push({ wildcard: { path: "Voter Name Eng", query: `${t}*`, allowAnalyzedField: true } });
+    }
+  });
+
+  // 2) SHOULD: adjacency boosts (both orders) on names
+  for (let i = 0; i < tokens.length; i++) {
+    for (let j = i + 1; j < tokens.length; j++) {
+      const a = tokens[i], b = tokens[j];
+      should.push(
+        { autocomplete: { path: "Voter Name Eng", query: `${a} ${b}`, fuzzy: { maxEdits: 1, prefixLength: 1 }, score: { boost: { value: 14 } } } },
+        { autocomplete: { path: "Voter Name Eng", query: `${b} ${a}`, fuzzy: { maxEdits: 1, prefixLength: 1 }, score: { boost: { value: 14 } } } },
+      );
+      if (!nameOnly) {
+        should.push(
+          { autocomplete: { path: "Relative Name Eng", query: `${a} ${b}`, fuzzy: { maxEdits: 1, prefixLength: 1 }, score: { boost: { value: 7 } } } },
+          { autocomplete: { path: "Relative Name Eng", query: `${b} ${a}`, fuzzy: { maxEdits: 1, prefixLength: 1 }, score: { boost: { value: 7 } } } },
+        );
+      }
+    }
+  }
+
+  // 3) SHOULD: phrase boost for overall sequence (and reversed)
+  if (tokens.length >= 2) {
+    const rev = [...tokens].reverse();
+    should.push(
+      { phrase: { path: "Voter Name Eng", query: tokens, slop: 1, score: { boost: { value: 10 } } } },
+      { phrase: { path: "Voter Name Eng", query: rev,    slop: 1, score: { boost: { value: 10 } } } },
+    );
+  }
+
+  // 4) SHOULD: initials exact (lowercase to match token normalizer)
+  if (tokens.length >= 2) {
+    const letters = tokens.map((t) => t[0]).filter(Boolean);
+    if (letters.length >= 2) {
+      should.push(
+        { equals: { path: "initials",       value: letters.join(""),   score: { boost: { value: 16 } } } },
+        { equals: { path: "initialsSpaced", value: letters.join(" "),  score: { boost: { value: 14 } } } },
+        { equals: { path: "initialsDotted", value: letters.join("."),  score: { boost: { value: 14 } } } },
+      );
+    }
+  }
+
+  // 5) SHOULD: full-text + fuzzy on English names; Marathi names/addresses too
+  should.push(
+    { text: { path: ["Voter Name Eng"],          query: qRaw, fuzzy: { maxEdits: 1 }, score: { boost: { value: 6 } } } },
+    ...(nameOnly ? [] : [
+      { text: { path: ["Relative Name Eng"],     query: qRaw, fuzzy: { maxEdits: 1 }, score: { boost: { value: 3 } } } },
+      { text: { path: ["Address Eng","Booth Eng"], query: qRaw, fuzzy: { maxEdits: 1 }, score: { boost: { value: 1 } } } },
+      { text: { path: ["Voter Name","Address","Booth"], query: qRaw, score: { boost: { value: 1 } } } },
+    ])
+  );
+
+  return { must, should, filter, minimumShouldMatch: 1 };
+}
+
+// --- main handler ----------------------------------------------------------
 const searchVoterFour = async (req, res) => {
   try {
     const {
@@ -434,95 +518,178 @@ const searchVoterFour = async (req, res) => {
       sourceFile,
       nameOnly,
       page = 1,
-      limit = 20,
-      sortBy = 'Voter Name Eng',
-      sortOrder = 'asc'
+      limit = 100,
+      sortBy = "Voter Name Eng",
+      sortOrder = "asc",
+      // "relevance" (default) keeps Atlas order; "field" sorts by your field.
+      sortMode = "relevance",
     } = req.query;
 
     if (!q) {
-      return res.status(400).json({
-        success: false,
-        message: 'Search query (q) is required'
-      });
+      return res.status(400).json({ success: false, message: "Search query (q) is required" });
     }
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const pg   = Math.max(1, parseInt(page, 10) || 1);
+    const lim  = Math.min(500, Math.max(1, parseInt(limit, 10) || 100));
+    const skip = (pg - 1) * lim;
 
-    // Build search filter
-    let searchFilter = {};
-    
-    if (nameOnly === 'true') {
-      // Search only in name fields
-      searchFilter.$or = [
-        { 'Voter Name Eng': { $regex: q, $options: 'i' } },
-        { 'Voter Name': { $regex: q, $options: 'i' } },
-        { 'Relative Name Eng': { $regex: q, $options: 'i' } },
-        { 'Relative Name': { $regex: q, $options: 'i' } }
-      ];
-    } else {
-      // Search in all fields
-      searchFilter.$or = [
-        { 'Voter Name Eng': { $regex: q, $options: 'i' } },
-        { 'Voter Name': { $regex: q, $options: 'i' } },
-        { 'Relative Name Eng': { $regex: q, $options: 'i' } },
-        { 'Relative Name': { $regex: q, $options: 'i' } },
-        { 'Address': { $regex: q, $options: 'i' } },
-        { 'Address Eng': { $regex: q, $options: 'i' } }
-      ];
+    const compound = buildCompound(q, { nameOnly: nameOnly === "true" });
+
+    // Pre-score filters
+    compound.filter = compound.filter || [];
+    if (isPaid !== undefined)    compound.filter.push({ equals: { path: "isPaid",    value: isPaid === "true" } });
+    if (isVisited !== undefined) compound.filter.push({ equals: { path: "isVisited", value: isVisited === "true" } });
+    if (isActive !== undefined)  compound.filter.push({ equals: { path: "isActive",  value: isActive === "true" } });
+    if (sourceFile)              compound.filter.push({ equals: { path: "sourceFile", value: String(sourceFile).toLowerCase() } });
+
+    const pipeline = [
+      { $search: { index: "voterfour_search", compound } },
+      { $addFields: { score: { $meta: "searchScore" } } }, // debug only
+    ];
+
+    if (sortMode === "field") {
+      pipeline.push({ $sort: { [sortBy]: (sortOrder === "desc" ? -1 : 1), _id: 1 } });
     }
+    pipeline.push({ $skip: skip }, { $limit: lim });
 
-    // Add additional filters
-    if (isPaid !== undefined) searchFilter.isPaid = isPaid === 'true';
-    if (isVisited !== undefined) searchFilter.isVisited = isVisited === 'true';
-    if (isActive !== undefined) searchFilter.isActive = isActive === 'true';
-    if (sourceFile) searchFilter.sourceFile = { $regex: sourceFile, $options: 'i' };
+    const countPipeline = [
+      { $searchMeta: { index: "voterfour_search", compound, count: { type: "total" } } }
+    ];
 
-    // Build sort object
-    const sortOptions = {};
-    sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
+    const [rows, meta] = await Promise.all([
+      VoterFour.aggregate(pipeline).allowDiskUse(true),
+      VoterFour.aggregate(countPipeline),
+    ]);
 
-    // Search VoterFour records
-    const voters = await VoterFour.find(searchFilter)
-      .sort(sortOptions)
-      .skip(skip)
-      .limit(parseInt(limit))
-      .lean();
-
-    // Get total count
-    const totalCount = await VoterFour.countDocuments(searchFilter);
-    const totalPages = Math.ceil(totalCount / parseInt(limit));
+    const totalCount = meta?.[0]?.count?.total ?? 0;
 
     res.json({
       success: true,
-      data: voters,
+      data: rows,
       pagination: {
-        currentPage: parseInt(page),
-        totalPages,
+        currentPage: pg,
+        totalPages: Math.ceil(totalCount / lim),
         totalCount,
-        hasNextPage: page < totalPages,
-        hasPrevPage: page > 1,
-        limit: parseInt(limit)
+        hasNextPage: pg * lim < totalCount,
+        hasPrevPage: pg > 1,
+        limit: lim,
       },
-      searchCriteria: {
-        query: q,
-        isPaid,
-        isVisited,
-        isActive,
-        sourceFile,
-        nameOnly,
-        sortBy,
-        sortOrder
-      }
+      searchCriteria: { q, isPaid, isVisited, isActive, sourceFile, nameOnly, sortBy, sortOrder, sortMode }
     });
   } catch (error) {
-    console.error('Search VoterFour error:', error);
+    console.error("Search VoterFour error:", error);
     res.status(500).json({
       success: false,
-      message: 'Error searching VoterFour records',
-      error: error.message
+      message: "Error searching VoterFour records",
+      error: error.message,
     });
   }
 };
+
+
+
+
+
+// GET /api/voterfour/search - Search VoterFour by Voter Name Eng
+// const searchVoterFour = async (req, res) => {
+//   try {
+//     const {
+//       q,
+//       isPaid,
+//       isVisited,
+//       isActive,
+//       sourceFile,
+//       nameOnly,
+//       page = 1,
+//       limit = 100,
+//       sortBy = 'Voter Name Eng',
+//       sortOrder = 'asc'
+//     } = req.query;
+
+//     if (!q) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Search query (q) is required'
+//       });
+//     }
+
+//     const skip = (parseInt(page) - 1) * parseInt(limit);
+
+//     // Build search filter
+//     let searchFilter = {};
+    
+//     if (nameOnly === 'true') {
+//       // Search only in name fields
+//       searchFilter.$or = [
+//         { 'Voter Name Eng': { $regex: q, $options: 'i' } },
+//         { 'Voter Name': { $regex: q, $options: 'i' } },
+//         { 'Relative Name Eng': { $regex: q, $options: 'i' } },
+//         { 'Relative Name': { $regex: q, $options: 'i' } }
+//       ];
+//     } else {
+//       // Search in all fields
+//       searchFilter.$or = [
+//         { 'Voter Name Eng': { $regex: q, $options: 'i' } },
+//         { 'Voter Name': { $regex: q, $options: 'i' } },
+//         { 'Relative Name Eng': { $regex: q, $options: 'i' } },
+//         { 'Relative Name': { $regex: q, $options: 'i' } },
+//         { 'Address': { $regex: q, $options: 'i' } },
+//         { 'Address Eng': { $regex: q, $options: 'i' } }
+//       ];
+//     }
+
+//     // Add additional filters
+//     if (isPaid !== undefined) searchFilter.isPaid = isPaid === 'true';
+//     if (isVisited !== undefined) searchFilter.isVisited = isVisited === 'true';
+//     if (isActive !== undefined) searchFilter.isActive = isActive === 'true';
+//     if (sourceFile) searchFilter.sourceFile = { $regex: sourceFile, $options: 'i' };
+
+//     // Build sort object
+//     const sortOptions = {};
+//     sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
+
+//     // Search VoterFour records
+//     const voters = await VoterFour.find(searchFilter)
+//       .sort(sortOptions)
+//       .skip(skip)
+//       .limit(parseInt(limit))
+//       .lean();
+
+//     // Get total count
+//     const totalCount = await VoterFour.countDocuments(searchFilter);
+//     const totalPages = Math.ceil(totalCount / parseInt(limit));
+
+//     res.json({
+//       success: true,
+//       data: voters,
+//       pagination: {
+//         currentPage: parseInt(page),
+//         totalPages,
+//         totalCount,
+//         hasNextPage: page < totalPages,
+//         hasPrevPage: page > 1,
+//         limit: parseInt(limit)
+//       },
+//       searchCriteria: {
+//         query: q,
+//         isPaid,
+//         isVisited,
+//         isActive,
+//         sourceFile,
+//         nameOnly,
+//         sortBy,
+//         sortOrder
+//       }
+//     });
+//   } catch (error) {
+//     console.error('Search VoterFour error:', error);
+//     res.status(500).json({
+//       success: false,
+//       message: 'Error searching VoterFour records',
+//       error: error.message
+//     });
+//   }
+// };
 
 module.exports = {
   getAllVoterFour,

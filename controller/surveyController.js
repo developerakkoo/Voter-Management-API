@@ -1295,12 +1295,27 @@ const getSurveyorAnalytics = async (req, res) => {
           surveyorId: '$_id',
           surveyorName: {
             $cond: {
-              if: { $ne: ['$surveyorInfo.name', null] },
+              if: { $and: [{ $ne: ['$surveyorInfo', null] }, { $ne: ['$surveyorInfo.name', null] }] },
               then: '$surveyorInfo.name',
-              else: 'Unknown Surveyor'
+              else: {
+                $concat: ['Unknown Surveyor (ID: ', { $toString: '$_id' }, ')']
+              }
             }
           },
-          surveyorEmail: '$surveyorInfo.email',
+          surveyorEmail: {
+            $cond: {
+              if: { $and: [{ $ne: ['$surveyorInfo', null] }, { $ne: ['$surveyorInfo.email', null] }] },
+              then: '$surveyorInfo.email',
+              else: 'No email found'
+            }
+          },
+          surveyorExists: {
+            $cond: {
+              if: { $ne: ['$surveyorInfo', null] },
+              then: true,
+              else: false
+            }
+          },
           totalSurveys: 1,
           submittedSurveys: 1,
           draftSurveys: 1,
@@ -1380,9 +1395,13 @@ const getSurveyorAnalytics = async (req, res) => {
     const totalDraftSurveys = analytics.reduce((sum, item) => sum + item.draftSurveys, 0);
     const totalTodaySurveys = analytics.reduce((sum, item) => sum + item.todaySurveys, 0);
     const totalYesterdaySurveys = analytics.reduce((sum, item) => sum + item.yesterdaySurveys, 0);
+    const missingSurveyors = analytics.filter(item => !item.surveyorExists).length;
+    const existingSurveyors = analytics.filter(item => item.surveyorExists).length;
     
     const summary = {
       totalSurveyors: totalCount,
+      existingSurveyors: existingSurveyors,
+      missingSurveyors: missingSurveyors,
       totalSurveys: totalSurveys,
       totalSubmittedSurveys: totalSubmittedSurveys,
       totalDraftSurveys: totalDraftSurveys,

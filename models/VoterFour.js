@@ -116,6 +116,25 @@ const voterFourSchema = new mongoose.Schema({
   timestamps: true
 });
 
+// in your VoterFour schema file
+function tokenizeName(name="") {
+  return name.replace(/[^A-Za-z\s]+/g," ").replace(/\s+/g," ").trim().split(" ").filter(Boolean).map(s=>s.toLowerCase());
+}
+function prefixesForToken(t){ const out=[]; for(let L=2; L<=Math.min(5,t.length); L++) out.push(t.slice(0,L)); return out; }
+function buildPrefixes(name){ const set=new Set(); tokenizeName(name).forEach(t=>prefixesForToken(t).forEach(p=>set.add(p))); return [...set]; }
+function initialsOf(name){ return tokenizeName(name).map(t=>t[0]?.toUpperCase()).filter(Boolean).join(""); }
+
+voterFourSchema.pre("save", function(next){
+  const name = this.get("Voter Name Eng") || this.voterNameEng || "";
+  const initials = initialsOf(name);
+  this.set("initials", initials);
+  this.set("initialsSpaced", initials.split("").join(" "));
+  this.set("initialsDotted", initials.split("").join("."));
+  this.set("namePrefixes", buildPrefixes(name));
+  next();
+});
+
+
 // Create text index for comprehensive search
 voterFourSchema.index({
   'Voter Name Eng': 'text',
