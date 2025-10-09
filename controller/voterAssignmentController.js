@@ -577,6 +577,478 @@ const deleteAssignment = async (req, res) => {
   }
 };
 
+// POST /api/assignment/assign-from-excel - Assign voters to sub admin using Excel file with CardNo/CodeNo
+const assignVotersFromExcel = async (req, res) => {
+  try {
+    const { subAdminId, voterType, notes } = req.body;
+    
+    // Validate required fields
+    if (!subAdminId || !voterType) {
+      return res.status(400).json({
+        success: false,
+        message: 'Sub admin ID and voter type are required'
+      });
+    }
+    
+    // Validate voter type
+    if (!['Voter', 'VoterFour'].includes(voterType)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Voter type must be either "Voter" or "VoterFour"'
+      });
+    }
+    
+    // Check if file was uploaded
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'Excel file is required'
+      });
+    }
+    
+    // Check if sub admin exists
+    const subAdmin = await SubAdmin.findById(subAdminId);
+    if (!subAdmin) {
+      return res.status(404).json({
+        success: false,
+        message: 'Sub admin not found'
+      });
+    }
+    
+    // Read Excel file
+    const ExcelReader = require('../utils/excelReader');
+    const excelReader = new ExcelReader(req.file.path);
+    const { data: excelData } = excelReader.excelToJson(req.file.originalname);
+    
+    // Extract CardNo or CodeNo from Excel
+    const identifiers = [];
+    excelData.forEach((row) => {
+      const identifier = row.CardNo || row.CodeNo || row['Card No'] || row['Code No'];
+      if (identifier && identifier.trim()) {
+        identifiers.push(identifier.trim());
+      }
+    });
+    
+    if (identifiers.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No CardNo or CodeNo found in Excel file. Please ensure the Excel has CardNo (for Voter) or CodeNo (for VoterFour) column.'
+      });
+    }
+    
+    // Find voters by CardNo or CodeNo
+    const VoterModel = voterType === 'Voter' ? Voter : VoterFour;
+    const searchField = voterType === 'Voter' ? 'CardNo' : 'CodeNo';
+    
+    const foundVoters = await VoterModel.find({
+      [searchField]: { $in: identifiers }
+    }).select('_id CardNo CodeNo Voter Name Eng AC Part');
+    
+    if (foundVoters.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: `No voters found matching the ${searchField} in the Excel file`,
+        details: {
+          identifiersInExcel: identifiers.length,
+          identifiersSample: identifiers.slice(0, 5)
+        }
+      });
+    }
+    
+    const voterIds = foundVoters.map(v => v._id);
+    
+    // Check for existing assignments
+    const existingAssignments = await VoterAssignment.find({
+      subAdminId,
+      voterId: { $in: voterIds },
+      voterType,
+      isActive: true
+    });
+    
+    const existingVoterIds = existingAssignments.map(a => a.voterId.toString());
+    const newVoterIds = voterIds.filter(id => !existingVoterIds.includes(id.toString()));
+    
+    // Create new assignments
+    let createdAssignments = [];
+    if (newVoterIds.length > 0) {
+      const newAssignments = newVoterIds.map(voterId => ({
+        subAdminId,
+        voterId,
+        voterType,
+        notes: notes || 'Assigned via Excel upload'
+      }));
+      
+      createdAssignments = await VoterAssignment.insertMany(newAssignments);
+    }
+    
+    // Clean up uploaded file
+    const fs = require('fs');
+    fs.unlinkSync(req.file.path);
+    
+    res.status(201).json({
+      success: true,
+      message: `Successfully processed Excel file and assigned voters`,
+      data: {
+        subAdminId,
+        subAdminName: subAdmin.fullName,
+        voterType,
+        excelStats: {
+          totalIdentifiersInExcel: identifiers.length,
+          votersFoundInDatabase: foundVoters.length,
+          votersNotFound: identifiers.length - foundVoters.length,
+          alreadyAssigned: existingAssignments.length,
+          newlyAssigned: createdAssignments.length
+        },
+        assignments: {
+          created: createdAssignments.length,
+          skipped: existingAssignments.length
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('Assign voters from Excel error:', error);
+    
+    // Clean up uploaded file on error
+    if (req.file && req.file.path) {
+      try {
+        const fs = require('fs');
+        fs.unlinkSync(req.file.path);
+      } catch (unlinkError) {
+        console.error('Error deleting uploaded file:', unlinkError);
+      }
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: 'Error assigning voters from Excel',
+      error: error.message
+    });
+  }
+};
+
+// GET /api/assignment/assignment-page - Get voters for assignment page with filtering and sorting
+const getAssignmentPageData = async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 100,
+      voterType = 'Voter',
+      subAdminId,
+      assignmentStatus = 'all', // 'all', 'assigned', 'unassigned'
+      search,
+      sortBy = 'Voter Name Eng',
+      sortOrder = 'asc',
+      ac,
+      part,
+      booth,
+      sex,
+      ageMin,
+      ageMax,
+      isPaid,
+      isVisited,
+      surveyDone
+    } = req.query;
+    
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    // Select the appropriate model
+    const VoterModel = voterType === 'Voter' ? Voter : VoterFour;
+    
+    // Build voter filter
+    let voterFilter = { isActive: true };
+    
+    // Apply filters
+    if (ac) {
+      voterFilter.AC = { $in: Array.isArray(ac) ? ac : ac.split(',') };
+    }
+    
+    if (part) {
+      voterFilter.Part = { $in: Array.isArray(part) ? part : part.split(',') };
+    }
+    
+    if (booth) {
+      const boothField = voterType === 'Voter' ? 'Booth' : 'Booth no';
+      voterFilter[boothField] = { $in: Array.isArray(booth) ? booth : booth.split(',') };
+    }
+    
+    if (sex) {
+      voterFilter.Sex = { $in: Array.isArray(sex) ? sex : sex.split(',') };
+    }
+    
+    if (ageMin || ageMax) {
+      voterFilter.Age = {};
+      if (ageMin) voterFilter.Age.$gte = parseInt(ageMin);
+      if (ageMax) voterFilter.Age.$lte = parseInt(ageMax);
+    }
+    
+    if (isPaid !== undefined) {
+      voterFilter.isPaid = isPaid === 'true';
+    }
+    
+    if (isVisited !== undefined) {
+      voterFilter.isVisited = isVisited === 'true';
+    }
+    
+    if (surveyDone !== undefined) {
+      voterFilter.surveyDone = surveyDone === 'true';
+    }
+    
+    // Search filter
+    if (search) {
+      voterFilter.$or = [
+        { 'Voter Name Eng': { $regex: search, $options: 'i' } },
+        { 'Voter Name': { $regex: search, $options: 'i' } },
+        { 'Relative Name Eng': { $regex: search, $options: 'i' } },
+        { 'Relative Name': { $regex: search, $options: 'i' } },
+        { 'CardNo': { $regex: search, $options: 'i' } },
+        { 'CodeNo': { $regex: search, $options: 'i' } },
+        { 'Address': { $regex: search, $options: 'i' } },
+        { 'Address Eng': { $regex: search, $options: 'i' } }
+      ];
+    }
+    
+    // Sort options
+    const sortOptions = {};
+    sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
+    
+    // Get voters with pagination
+    const [voters, totalVoterCount] = await Promise.all([
+      VoterModel.find(voterFilter)
+        .sort(sortOptions)
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      VoterModel.countDocuments(voterFilter)
+    ]);
+    
+    // Get voter IDs
+    const voterIds = voters.map(v => v._id);
+    
+    // Get assignment information
+    let assignmentFilter = {
+      voterId: { $in: voterIds },
+      voterType,
+      isActive: true
+    };
+    
+    // If subAdminId is provided, filter by specific sub admin
+    if (subAdminId) {
+      assignmentFilter.subAdminId = subAdminId;
+    }
+    
+    const assignments = await VoterAssignment.find(assignmentFilter)
+      .populate('subAdminId', 'fullName userId locationName')
+      .lean();
+    
+    // Create assignment lookup map
+    const assignmentMap = {};
+    assignments.forEach(assignment => {
+      assignmentMap[assignment.voterId.toString()] = assignment;
+    });
+    
+    // Add assignment status to each voter
+    let votersWithAssignment = voters.map(voter => ({
+      _id: voter._id,
+      voterType: voterType,
+      'Voter Name Eng': voter['Voter Name Eng'],
+      'Voter Name': voter['Voter Name'],
+      AC: voter.AC,
+      Part: voter.Part,
+      Booth: voter.Booth || voter['Booth no'],
+      Age: voter.Age,
+      Sex: voter.Sex,
+      CardNo: voter.CardNo,
+      CodeNo: voter.CodeNo,
+      Address: voter['Address Eng'] || voter.Address,
+      isPaid: voter.isPaid,
+      isVisited: voter.isVisited,
+      surveyDone: voter.surveyDone,
+      pno: voter.pno,
+      assignmentStatus: assignmentMap[voter._id.toString()] ? {
+        isAssigned: true,
+        assignmentId: assignmentMap[voter._id.toString()]._id,
+        subAdmin: assignmentMap[voter._id.toString()].subAdminId,
+        assignedAt: assignmentMap[voter._id.toString()].assignedAt,
+        notes: assignmentMap[voter._id.toString()].notes
+      } : {
+        isAssigned: false,
+        assignmentId: null,
+        subAdmin: null,
+        assignedAt: null,
+        notes: null
+      }
+    }));
+    
+    // Filter by assignment status if requested
+    if (assignmentStatus === 'assigned') {
+      votersWithAssignment = votersWithAssignment.filter(v => v.assignmentStatus.isAssigned);
+    } else if (assignmentStatus === 'unassigned') {
+      votersWithAssignment = votersWithAssignment.filter(v => !v.assignmentStatus.isAssigned);
+    }
+    
+    // Count assigned and unassigned
+    const assignedCount = votersWithAssignment.filter(v => v.assignmentStatus.isAssigned).length;
+    const unassignedCount = votersWithAssignment.filter(v => !v.assignmentStatus.isAssigned).length;
+    
+    const totalPages = Math.ceil(totalVoterCount / parseInt(limit));
+    
+    res.json({
+      success: true,
+      data: votersWithAssignment,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages,
+        totalCount: totalVoterCount,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+        limit: parseInt(limit)
+      },
+      stats: {
+        totalVoters: votersWithAssignment.length,
+        assignedVoters: assignedCount,
+        unassignedVoters: unassignedCount,
+        assignmentPercentage: votersWithAssignment.length > 0 
+          ? ((assignedCount / votersWithAssignment.length) * 100).toFixed(2) 
+          : 0
+      },
+      filters: {
+        voterType,
+        subAdminId,
+        assignmentStatus,
+        search,
+        ac,
+        part,
+        booth,
+        sex,
+        ageMin,
+        ageMax,
+        isPaid,
+        isVisited,
+        surveyDone,
+        sortBy,
+        sortOrder
+      }
+    });
+    
+  } catch (error) {
+    console.error('Get assignment page data error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching assignment page data',
+      error: error.message
+    });
+  }
+};
+
+// POST /api/assignment/assign-selected - Assign selected voters to sub admin (supports 100, 500, 1000+ at once)
+const assignSelectedVoters = async (req, res) => {
+  try {
+    const { subAdminId, voterIds, voterType, notes } = req.body;
+    
+    // Validate required fields
+    if (!subAdminId || !voterIds || !Array.isArray(voterIds) || !voterType) {
+      return res.status(400).json({
+        success: false,
+        message: 'Sub admin ID, voter IDs array, and voter type are required'
+      });
+    }
+    
+    // Validate voter type
+    if (!['Voter', 'VoterFour'].includes(voterType)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Voter type must be either "Voter" or "VoterFour"'
+      });
+    }
+    
+    // Validate array size
+    if (voterIds.length > 10000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot assign more than 10,000 voters at once. Please split into multiple batches.'
+      });
+    }
+    
+    // Check if sub admin exists
+    const subAdmin = await SubAdmin.findById(subAdminId);
+    if (!subAdmin) {
+      return res.status(404).json({
+        success: false,
+        message: 'Sub admin not found'
+      });
+    }
+    
+    // Verify voters exist
+    const VoterModel = voterType === 'Voter' ? Voter : VoterFour;
+    const existingVoters = await VoterModel.find({ _id: { $in: voterIds } });
+    
+    const foundVoterIds = existingVoters.map(v => v._id.toString());
+    const notFoundIds = voterIds.filter(id => !foundVoterIds.includes(id.toString()));
+    
+    if (foundVoterIds.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'None of the provided voter IDs were found in the database'
+      });
+    }
+    
+    // Check for existing assignments
+    const existingAssignments = await VoterAssignment.find({
+      subAdminId,
+      voterId: { $in: foundVoterIds },
+      voterType,
+      isActive: true
+    });
+    
+    const alreadyAssignedIds = existingAssignments.map(a => a.voterId.toString());
+    const newVoterIds = foundVoterIds.filter(id => !alreadyAssignedIds.includes(id));
+    
+    // Create new assignments
+    let createdAssignments = [];
+    if (newVoterIds.length > 0) {
+      const newAssignments = newVoterIds.map(voterId => ({
+        subAdminId,
+        voterId,
+        voterType,
+        notes: notes || `Bulk assignment of ${voterIds.length} voters`
+      }));
+      
+      createdAssignments = await VoterAssignment.insertMany(newAssignments);
+    }
+    
+    res.status(201).json({
+      success: true,
+      message: `Successfully assigned ${createdAssignments.length} voters to sub admin`,
+      data: {
+        subAdminId,
+        subAdminName: subAdmin.fullName,
+        voterType,
+        requestedCount: voterIds.length,
+        votersFound: foundVoterIds.length,
+        votersNotFound: notFoundIds.length,
+        alreadyAssigned: alreadyAssignedIds.length,
+        newlyAssigned: createdAssignments.length,
+        notFoundIds: notFoundIds.length > 0 ? notFoundIds.slice(0, 10) : [],
+        summary: {
+          total: voterIds.length,
+          successful: createdAssignments.length,
+          skipped: alreadyAssignedIds.length,
+          notFound: notFoundIds.length
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('Assign selected voters error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error assigning selected voters',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   assignVotersToSubAdmin,
   getVotersWithAssignmentStatus,
@@ -585,5 +1057,8 @@ module.exports = {
   getSubAdminAssignments,
   getVoterAssignments,
   getAssignmentStats,
-  deleteAssignment
+  deleteAssignment,
+  assignVotersFromExcel,
+  getAssignmentPageData,
+  assignSelectedVoters
 };
