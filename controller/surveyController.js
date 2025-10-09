@@ -1452,5 +1452,166 @@ module.exports = {
   getAvailableVoters,
   getSurveyMapData,
   getSurveyMapStats,
-  getSurveyorAnalytics
+  getSurveyorAnalytics,
+  getSurveyDiagnostics
 };
+
+// GET /api/survey/diagnostics - Get comprehensive survey diagnostics
+async function getSurveyDiagnostics(req, res) {
+  try {
+    const { limit = 1000 } = req.query;
+    
+    // Get comprehensive diagnostics
+    const [
+      totalSurveys,
+      surveysByStatus,
+      surveysByVoterType,
+      recentSurveys,
+      surveysWithIssues,
+      surveyorStats,
+      locationStats
+    ] = await Promise.all([
+      // Total surveys count
+      Survey.countDocuments(),
+      
+      // Surveys grouped by status
+      Survey.aggregate([
+        {
+          $group: {
+            _id: '$status',
+            count: { $sum: 1 }
+          }
+        }
+      ]),
+      
+      // Surveys grouped by voter type
+      Survey.aggregate([
+        {
+          $group: {
+            _id: '$voterType',
+            count: { $sum: 1 }
+          }
+        }
+      ]),
+      
+      // Recent surveys
+      Survey.find()
+        .populate('surveyorId', 'fullName userId')
+        .populate('voterId', 'Voter Name Eng')
+        .sort({ createdAt: -1 })
+        .limit(parseInt(limit))
+        .lean(),
+      
+      // Surveys with potential issues (missing critical data)
+      Survey.find({
+        $or: [
+          { surveyorId: { $exists: false } },
+          { voterId: { $exists: false } },
+          { 'location.coordinates': { $exists: false } },
+          { voterPhoneNumber: { $exists: false } }
+        ]
+      })
+        .populate('surveyorId', 'fullName userId')
+        .limit(100)
+        .lean(),
+      
+      // Surveyor statistics
+      Survey.aggregate([
+        {
+          $group: {
+            _id: '$surveyorId',
+            totalSurveys: { $sum: 1 },
+            completedSurveys: {
+              $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] }
+            },
+            pendingSurveys: {
+              $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] }
+            }
+          }
+        },
+        {
+          $lookup: {
+            from: 'users',
+            localField: '_id',
+            foreignField: '_id',
+            as: 'surveyor'
+          }
+        },
+        {
+          $unwind: {
+            path: '$surveyor',
+            preserveNullAndEmptyArrays: true
+          }
+        },
+        {
+          $project: {
+            surveyorId: '$_id',
+            surveyorName: '$surveyor.fullName',
+            surveyorUserId: '$surveyor.userId',
+            totalSurveys: 1,
+            completedSurveys: 1,
+            pendingSurveys: 1
+          }
+        },
+        { $sort: { totalSurveys: -1 } },
+        { $limit: 50 }
+      ]),
+      
+      // Location statistics
+      Survey.aggregate([
+        {
+          $match: {
+            'location.coordinates': { $exists: true }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalWithLocation: { $sum: 1 },
+            avgLatitude: { $avg: { $arrayElemAt: ['$location.coordinates', 1] } },
+            avgLongitude: { $avg: { $arrayElemAt: ['$location.coordinates', 0] } }
+          }
+        }
+      ])
+    ]);
+
+    // Calculate additional metrics
+    const surveysWithoutLocation = totalSurveys - (locationStats[0]?.totalWithLocation || 0);
+    const completionRate = surveysByStatus.find(s => s._id === 'completed')?.count || 0;
+    const completionPercentage = totalSurveys > 0 ? ((completionRate / totalSurveys) * 100).toFixed(2) : 0;
+
+    res.json({
+      success: true,
+      data: {
+        overview: {
+          totalSurveys,
+          completionPercentage: `${completionPercentage}%`,
+          surveysWithLocation: locationStats[0]?.totalWithLocation || 0,
+          surveysWithoutLocation,
+          surveysWithIssuesCount: surveysWithIssues.length
+        },
+        statusBreakdown: surveysByStatus,
+        voterTypeBreakdown: surveysByVoterType,
+        topSurveyors: surveyorStats,
+        locationStats: locationStats[0] || {
+          totalWithLocation: 0,
+          avgLatitude: null,
+          avgLongitude: null
+        },
+        recentSurveys: recentSurveys.slice(0, 20), // Limit to 20 for response size
+        surveysWithIssues: surveysWithIssues.slice(0, 10), // Limit to 10 for response size
+        metadata: {
+          generatedAt: new Date(),
+          requestedLimit: parseInt(limit)
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Get survey diagnostics error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching survey diagnostics',
+      error: error.message
+    });
+  }
+}
