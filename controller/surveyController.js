@@ -1497,7 +1497,6 @@ async function getSurveyDiagnostics(req, res) {
       // Recent surveys
       Survey.find()
         .populate('surveyorId', 'fullName userId')
-        .populate('voterId', 'Voter Name Eng')
         .sort({ createdAt: -1 })
         .limit(parseInt(limit))
         .lean(),
@@ -1574,6 +1573,64 @@ async function getSurveyDiagnostics(req, res) {
         }
       ])
     ]);
+
+    // Manually populate voter data for recent surveys
+    for (const survey of recentSurveys) {
+      if (survey.voterId && survey.voterType) {
+        const VoterModel = survey.voterType === 'Voter' ? Voter : VoterFour;
+        try {
+          const voterData = await VoterModel.findById(survey.voterId).lean();
+          if (voterData) {
+            // Create a clean voter object with the essential fields
+            survey.voterInfo = {
+              _id: voterData._id,
+              name: voterData['Voter Name Eng'] || voterData['Voter Name'] || 'Unknown',
+              nameHindi: voterData['Voter Name'],
+              ac: voterData.AC,
+              part: voterData.Part,
+              booth: voterData.Booth || voterData['Booth no'],
+              age: voterData.Age,
+              sex: voterData.Sex,
+              cardNo: voterData.CardNo,
+              address: voterData['Address Eng'] || voterData.Address
+            };
+          }
+        } catch (err) {
+          // Keep the original voterId if population fails
+          console.error('Error populating voter:', err);
+          survey.voterInfo = null;
+        }
+      }
+    }
+
+    // Manually populate voter data for surveys with issues
+    for (const survey of surveysWithIssues) {
+      if (survey.voterId && survey.voterType) {
+        const VoterModel = survey.voterType === 'Voter' ? Voter : VoterFour;
+        try {
+          const voterData = await VoterModel.findById(survey.voterId).lean();
+          if (voterData) {
+            // Create a clean voter object with the essential fields
+            survey.voterInfo = {
+              _id: voterData._id,
+              name: voterData['Voter Name Eng'] || voterData['Voter Name'] || 'Unknown',
+              nameHindi: voterData['Voter Name'],
+              ac: voterData.AC,
+              part: voterData.Part,
+              booth: voterData.Booth || voterData['Booth no'],
+              age: voterData.Age,
+              sex: voterData.Sex,
+              cardNo: voterData.CardNo,
+              address: voterData['Address Eng'] || voterData.Address
+            };
+          }
+        } catch (err) {
+          // Keep the original voterId if population fails
+          console.error('Error populating voter:', err);
+          survey.voterInfo = null;
+        }
+      }
+    }
 
     // Calculate additional metrics
     const surveysWithoutLocation = totalSurveys - (locationStats[0]?.totalWithLocation || 0);

@@ -1,0 +1,132 @@
+[dotenv@17.2.3] injecting env (4) from .env -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }
+(node:15724) [MONGOOSE] Warning: Duplicate schema index on {"Voter Name Eng":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:15724) [MONGOOSE] Warning: Duplicate schema index on {"CardNo":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(node:15724) [MONGOOSE] Warning: Duplicate schema index on {"Voter Name Eng":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(node:15724) [MONGOOSE] Warning: Duplicate schema index on {"CardNo":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(node:15724) [MONGOOSE] Warning: Duplicate schema index on {"email":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(node:15724) [MONGOOSE] Warning: Duplicate schema index on {"userId":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(node:15724) [MONGOOSE] Warning: Duplicate schema index on {"name":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(node:15724) [MONGOOSE] Warning: Duplicate schema index on {"userId":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(node:15724) [MONGODB DRIVER] Warning: useNewUrlParser is a deprecated option: useNewUrlParser has no effect since Node.js Driver version 4.0.0 and will be removed in the next major version
+(node:15724) [MONGODB DRIVER] Warning: useUnifiedTopology is a deprecated option: useUnifiedTopology has no effect since Node.js Driver version 4.0.0 and will be removed in the next major version
+Voter API server running on port 3000
+Health check: http://localhost:3000/health
+Upload endpoint: POST http://localhost:3000/api/upload
+Upload Four endpoint: POST http://localhost:3000/api/upload-four
+Search endpoint: GET http://localhost:3000/api/search
+Search Four endpoint: GET http://localhost:3000/api/search-four
+Statistics endpoint: GET http://localhost:3000/api/stats
+Admin endpoints:
+  POST http://localhost:3000/api/admin/login - Admin login
+  GET http://localhost:3000/api/admin - Get all admins
+  POST http://localhost:3000/api/admin - Create admin
+  GET http://localhost:3000/api/admin/:id - Get admin by ID
+  PUT http://localhost:3000/api/admin/:id - Update admin
+  DELETE http://localhost:3000/api/admin/:id - Delete admin
+Voter endpoints:
+  GET http://localhost:3000/api/voter - Get all voters with pagination, filtering, and search
+  GET http://localhost:3000/api/voter/search - Search voters by Voter Name Eng (paginated)
+  GET http://localhost:3000/api/voter/search/all - Search all voters matching criteria (no pagination)
+  GET http://localhost:3000/api/voter/stats - Get voter statistics
+  GET http://localhost:3000/api/voter/:id - Get voter by ID
+  PUT http://localhost:3000/api/voter/:id - Update voter
+  DELETE http://localhost:3000/api/voter/:id - Delete voter
+  DELETE http://localhost:3000/api/voter - Delete all voters
+  PATCH http://localhost:3000/api/voter/:id/paid - Update isPaid status
+  PATCH http://localhost:3000/api/voter/:id/visited - Update isVisited status
+  PATCH http://localhost:3000/api/voter/:id/status - Update both statuses
+VoterFour endpoints:
+  GET http://localhost:3000/api/voterfour - Get all VoterFour records with pagination, filtering, and search
+  GET http://localhost:3000/api/voterfour/search - Search VoterFour by Voter Name Eng
+  GET http://localhost:3000/api/voterfour/stats - Get VoterFour statistics
+  GET http://localhost:3000/api/voterfour/:id - Get VoterFour by ID
+  PUT http://localhost:3000/api/voterfour/:id - Update VoterFour
+  DELETE http://localhost:3000/api/voterfour/:id - Delete VoterFour
+  DELETE http://localhost:3000/api/voterfour - Delete all VoterFour records
+  PATCH http://localhost:3000/api/voterfour/:id/paid - Update isPaid status
+  PATCH http://localhost:3000/api/voterfour/:id/visited - Update isVisited status
+  PATCH http://localhost:3000/api/voterfour/:id/status - Update both statuses
+Sub Admin endpoints:
+  POST http://localhost:3000/api/subadmin/login - Sub admin login
+  GET http://localhost:3000/api/subadmin - Get all sub admins
+  POST http://localhost:3000/api/subadmin - Create sub admin
+  GET http://localhost:3000/api/subadmin/:id - Get sub admin by ID
+  PUT http://localhost:3000/api/subadmin/:id - Update sub admin
+  DELETE http://localhost:3000/api/subadmin/:id - Delete sub admin
+  GET http://localhost:3000/api/subadmin/:id/assigned-voters - Get assigned voters
+  GET http://localhost:3000/api/subadmin/:id/stats - Get sub admin statistics
+Voter Assignment endpoints (Admin only):
+  POST http://localhost:3000/api/assignment/assign - Assign voters to sub admin
+  DELETE http://localhost:3000/api/assignment/unassign - Unassign voters from sub admin
+  GET http://localhost:3000/api/assignment/subadmin/:id - Get sub admin assignments
+  GET http://localhost:3000/api/assignment/voter/:voterId/:voterType - Get voter assignments
+  GET http://localhost:3000/api/assignment/stats - Get assignment statistics
+Sub Admin Voter endpoints (Sub Admin only):
+  GET http://localhost:3000/api/subadmin/voters - Get assigned voters
+  GET http://localhost:3000/api/subadmin/voters/search - Search assigned voters
+  GET http://localhost:3000/api/subadmin/voters/filter - Filter assigned voters
+  GET http://localhost:3000/api/subadmin/voters/:voterId/:voterType - Get specific assigned voter
+  PUT http://localhost:3000/api/subadmin/voters/:voterId/:voterType - Update assigned voter
+  PATCH http://localhost:3000/api/subadmin/voters/:voterId/:voterType/paid - Update payment status
+  PATCH http://localhost:3000/api/subadmin/voters/:voterId/:voterType/visited - Update visit status
+  PATCH http://localhost:3000/api/subadmin/voters/:voterId/:voterType/status - Update both statuses
+  GET http://localhost:3000/api/subadmin/voters/stats - Get assigned voters statistics
+Alert endpoints:
+  GET http://localhost:3000/api/alert/published - Get published alerts (public)
+  GET http://localhost:3000/api/alert/stats - Get alert statistics (public)
+  GET http://localhost:3000/api/alert - Get all alerts (Admin/SubAdmin)
+  GET http://localhost:3000/api/alert/:id - Get alert by ID
+  POST http://localhost:3000/api/alert - Create alert (Admin/SubAdmin)
+  PUT http://localhost:3000/api/alert/:id - Update alert (Admin/SubAdmin)
+  DELETE http://localhost:3000/api/alert/:id - Delete alert (Admin/SubAdmin)
+  DELETE http://localhost:3000/api/alert - Delete all alerts (Admin only)
+  POST http://localhost:3000/api/alert/:id/images - Upload images to alert (Admin/SubAdmin)
+  DELETE http://localhost:3000/api/alert/:id/images/:imageId - Delete specific image (Admin/SubAdmin)
+  PATCH http://localhost:3000/api/alert/:id/publish - Publish alert (Admin/SubAdmin)
+  PATCH http://localhost:3000/api/alert/:id/unpublish - Unpublish alert (Admin/SubAdmin)
+Category endpoints:
+  GET http://localhost:3000/api/category/active - Get active categories (public)
+  GET http://localhost:3000/api/category/search - Search categories (public)
+  GET http://localhost:3000/api/category/stats - Get category statistics (public)
+  GET http://localhost:3000/api/category - Get all categories (Admin/SubAdmin)
+  GET http://localhost:3000/api/category/:id - Get category by ID
+  POST http://localhost:3000/api/category - Create category (Admin/SubAdmin)
+  PUT http://localhost:3000/api/category/:id - Update category (Admin/SubAdmin)
+  DELETE http://localhost:3000/api/category/:id - Delete category (Admin/SubAdmin)
+  DELETE http://localhost:3000/api/category - Delete all categories (Admin only)
+  GET http://localhost:3000/api/category/:id/data - Get data entries for category (Admin/SubAdmin)
+  POST http://localhost:3000/api/category/:id/data - Add data entry to category (Admin/SubAdmin)
+  PUT http://localhost:3000/api/category/:id/data/:entryId - Update data entry (Admin/SubAdmin)
+  DELETE http://localhost:3000/api/category/:id/data/:entryId - Delete data entry (Admin/SubAdmin)
+  PATCH http://localhost:3000/api/category/:id/data/reorder - Reorder data entries (Admin/SubAdmin)
+Combined Voters endpoints:
+  GET http://localhost:3000/api/voters/all - Get all voters from both Voter and VoterFour collections
+  GET http://localhost:3000/api/voters/all/stats - Get combined statistics for all voters
+  GET http://localhost:3000/api/voters/all/search - Search across both collections
+  GET http://localhost:3000/api/voters/all/stream - Stream voters for very large datasets (cursor-based pagination)
+User endpoints:
+  GET http://localhost:3000/api/user - Get all users with pagination, search, sort, and filter
+  GET http://localhost:3000/api/user/stats - Get user statistics
+  GET http://localhost:3000/api/user/search - Search users
+  GET http://localhost:3000/api/user/pno/:pno - Get users by PNO (3 or 4)
+  GET http://localhost:3000/api/user/:id - Get user by ID
+  POST http://localhost:3000/api/user - Create new user
+  POST http://localhost:3000/api/user/login - User login with userId and password
+  PUT http://localhost:3000/api/user/:id - Update user
+  DELETE http://localhost:3000/api/user/:id - Delete user
+  DELETE http://localhost:3000/api/user - Delete all users
+Survey endpoints:
+  GET http://localhost:3000/api/survey - Get all surveys with pagination, filtering, and search
+  GET http://localhost:3000/api/survey/stats - Get survey statistics
+  GET http://localhost:3000/api/survey/available-voters - Get available voters for testing
+  GET http://localhost:3000/api/survey/search - Search surveys
+  GET http://localhost:3000/api/survey/surveyor/:surveyorId - Get surveys by surveyor
+  GET http://localhost:3000/api/survey/voter/:voterId/:voterType - Get surveys by voter
+  GET http://localhost:3000/api/survey/:id - Get survey by ID
+  POST http://localhost:3000/api/survey - Create new survey
+  PUT http://localhost:3000/api/survey/:id - Update survey
+  PATCH http://localhost:3000/api/survey/:id/status - Update survey status
+  DELETE http://localhost:3000/api/survey/:id - Delete survey
+  DELETE http://localhost:3000/api/survey - Delete all surveys
+Connected to MongoDB
