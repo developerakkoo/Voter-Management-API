@@ -20,6 +20,7 @@ const subAdminVoterRoutes = require('./routes/subAdminVoterRoutes');
 const alertRoutes = require('./routes/alertRoutes');
 const categoryRoutes = require('./routes/categoryRoutes');
 const combinedVotersRoutes = require('./routes/combinedVotersRoutes');
+const unifiedVoterRoutes = require('./routes/unifiedVoterRoutes');
 const userRoutes = require('./routes/userRoutes');
 const surveyRoutes = require('./routes/surveyRoutes');
 const { testAuth } = require('./test-auth');
@@ -103,6 +104,9 @@ app.use('/api/category', categoryRoutes);
 
 // Combined Voters routes
 app.use('/api/voters', combinedVotersRoutes);
+
+// Unified Voter routes (handles both Voter and VoterFour)
+app.use('/api/unified-voter', unifiedVoterRoutes);
 
 // User routes
 app.use('/api/user', userRoutes);
