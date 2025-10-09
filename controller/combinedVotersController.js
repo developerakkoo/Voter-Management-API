@@ -382,22 +382,49 @@ const getCombinedVotersStats = async (req, res) => {
       voter: {
         total: voterStatsData.total,
         active: voterStatsData.active,
+        inactive: voterStatsData.total - voterStatsData.active,
         paid: voterStatsData.paid,
+        unpaid: voterStatsData.total - voterStatsData.paid,
+        paidPercentage: voterStatsData.total > 0 
+          ? ((voterStatsData.paid / voterStatsData.total) * 100).toFixed(2) 
+          : '0.00',
         visited: voterStatsData.visited,
+        unvisited: voterStatsData.total - voterStatsData.visited,
+        visitedPercentage: voterStatsData.total > 0 
+          ? ((voterStatsData.visited / voterStatsData.total) * 100).toFixed(2) 
+          : '0.00',
         avgAge: Math.round(voterStatsData.avgAge || 0)
       },
       voterFour: {
         total: voterFourStatsData.total,
         active: voterFourStatsData.active,
+        inactive: voterFourStatsData.total - voterFourStatsData.active,
         paid: voterFourStatsData.paid,
+        unpaid: voterFourStatsData.total - voterFourStatsData.paid,
+        paidPercentage: voterFourStatsData.total > 0 
+          ? ((voterFourStatsData.paid / voterFourStatsData.total) * 100).toFixed(2) 
+          : '0.00',
         visited: voterFourStatsData.visited,
+        unvisited: voterFourStatsData.total - voterFourStatsData.visited,
+        visitedPercentage: voterFourStatsData.total > 0 
+          ? ((voterFourStatsData.visited / voterFourStatsData.total) * 100).toFixed(2) 
+          : '0.00',
         avgAge: Math.round(voterFourStatsData.avgAge || 0)
       },
       combined: {
         total: voterStatsData.total + voterFourStatsData.total,
         active: voterStatsData.active + voterFourStatsData.active,
+        inactive: (voterStatsData.total - voterStatsData.active) + (voterFourStatsData.total - voterFourStatsData.active),
         paid: voterStatsData.paid + voterFourStatsData.paid,
+        unpaid: (voterStatsData.total - voterStatsData.paid) + (voterFourStatsData.total - voterFourStatsData.paid),
+        paidPercentage: (voterStatsData.total + voterFourStatsData.total) > 0 
+          ? (((voterStatsData.paid + voterFourStatsData.paid) / (voterStatsData.total + voterFourStatsData.total)) * 100).toFixed(2) 
+          : '0.00',
         visited: voterStatsData.visited + voterFourStatsData.visited,
+        unvisited: (voterStatsData.total - voterStatsData.visited) + (voterFourStatsData.total - voterFourStatsData.visited),
+        visitedPercentage: (voterStatsData.total + voterFourStatsData.total) > 0 
+          ? (((voterStatsData.visited + voterFourStatsData.visited) / (voterStatsData.total + voterFourStatsData.total)) * 100).toFixed(2) 
+          : '0.00',
         avgAge: Math.round(((voterStatsData.avgAge || 0) + (voterFourStatsData.avgAge || 0)) / 2)
       }
     };

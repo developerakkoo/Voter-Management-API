@@ -16,7 +16,9 @@ const {
   assignSelectedVoters,
   getUnassignedVoters,
   getVoterFilterOptions,
-  getVoterFourFilterOptions
+  getVoterFourFilterOptions,
+  bulkUpdateVoterStatus,
+  bulkUpdateStatusFromExcel
 } = require('../controller/voterAssignmentController');
 // const { authenticateToken } = require('../middleware/auth');
 
@@ -67,6 +69,12 @@ router.post('/assign-selected', assignSelectedVoters);
 
 // POST /api/assignment/assign-from-excel - Assign voters from Excel file
 router.post('/assign-from-excel', upload.single('file'), assignVotersFromExcel);
+
+// PATCH /api/assignment/bulk-update-status - Bulk update voter status (paid/visited)
+router.patch('/bulk-update-status', bulkUpdateVoterStatus);
+
+// POST /api/assignment/bulk-update-status-from-excel - Bulk update status from Excel
+router.post('/bulk-update-status-from-excel', upload.single('file'), bulkUpdateStatusFromExcel);
 
 // DELETE /api/assignment/unassign - Unassign voters from sub admin (Admin only)
 router.delete('/unassign', unassignVotersFromSubAdmin);

@@ -1295,6 +1295,255 @@ const getVoterFourFilterOptions = async (req, res) => {
   }
 };
 
+// PATCH /api/assignment/bulk-update-status - Bulk update paid/visited status for multiple voters
+const bulkUpdateVoterStatus = async (req, res) => {
+  try {
+    const { voterIds, voterType, isPaid, isVisited } = req.body;
+    
+    // Validate required fields
+    if (!voterIds || !Array.isArray(voterIds) || voterIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'voterIds array is required and must contain at least one ID'
+      });
+    }
+    
+    if (!voterType) {
+      return res.status(400).json({
+        success: false,
+        message: 'voterType is required'
+      });
+    }
+    
+    // Validate voter type
+    if (!['Voter', 'VoterFour'].includes(voterType)) {
+      return res.status(400).json({
+        success: false,
+        message: 'voterType must be either "Voter" or "VoterFour"'
+      });
+    }
+    
+    // Validate at least one status field is provided
+    if (typeof isPaid !== 'boolean' && typeof isVisited !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        message: 'At least one status field (isPaid or isVisited) must be provided'
+      });
+    }
+    
+    // Validate array size
+    if (voterIds.length > 10000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot update more than 10,000 voters at once'
+      });
+    }
+    
+    // Build update object
+    const updateData = { lastUpdated: new Date() };
+    if (typeof isPaid === 'boolean') updateData.isPaid = isPaid;
+    if (typeof isVisited === 'boolean') updateData.isVisited = isVisited;
+    
+    // Select the appropriate model
+    const VoterModel = voterType === 'Voter' ? Voter : VoterFour;
+    
+    // Update voters
+    const result = await VoterModel.updateMany(
+      { _id: { $in: voterIds } },
+      { $set: updateData }
+    );
+    
+    res.json({
+      success: true,
+      message: `Successfully updated ${result.modifiedCount} voters`,
+      data: {
+        voterType,
+        requestedCount: voterIds.length,
+        modifiedCount: result.modifiedCount,
+        matchedCount: result.matchedCount,
+        updates: {
+          isPaid: typeof isPaid === 'boolean' ? isPaid : 'unchanged',
+          isVisited: typeof isVisited === 'boolean' ? isVisited : 'unchanged'
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('Bulk update voter status error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error updating voter statuses',
+      error: error.message
+    });
+  }
+};
+
+// POST /api/assignment/bulk-update-status-from-excel - Bulk update status from Excel file
+const bulkUpdateStatusFromExcel = async (req, res) => {
+  try {
+    const { voterType, isPaid, isVisited } = req.body;
+    
+    // Validate required fields
+    if (!voterType) {
+      return res.status(400).json({
+        success: false,
+        message: 'voterType is required'
+      });
+    }
+    
+    // Validate voter type
+    if (!['Voter', 'VoterFour'].includes(voterType)) {
+      return res.status(400).json({
+        success: false,
+        message: 'voterType must be either "Voter" or "VoterFour"'
+      });
+    }
+    
+    // Validate at least one status field
+    if (typeof isPaid !== 'boolean' && typeof isVisited !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        message: 'At least one status field (isPaid or isVisited) must be provided'
+      });
+    }
+    
+    // Check if file was uploaded
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'Excel file is required'
+      });
+    }
+    
+    // Read Excel file
+    const ExcelReader = require('../utils/excelReader');
+    const excelReader = new ExcelReader(req.file.path);
+    const { data: excelData } = excelReader.excelToJson(req.file.originalname);
+    
+    // Extract identifiers
+    const identifiers = [];
+    const identifierFields = [
+      'CardNo', 'Card No', 'Cardno', 'cardno', 'CARDNO',
+      'CodeNo', 'Code No', 'Codeno', 'codeno', 'CODENO',
+      'VoterID', 'Voter ID', 'VoterId', 'EPIC'
+    ];
+    
+    excelData.forEach((row) => {
+      let identifier = null;
+      for (const field of identifierFields) {
+        if (row[field]) {
+          identifier = row[field];
+          break;
+        }
+      }
+      
+      // Fallback: check any column with 'card' or 'code'
+      if (!identifier) {
+        const keys = Object.keys(row);
+        for (const key of keys) {
+          if ((key.toLowerCase().includes('card') || key.toLowerCase().includes('code')) && row[key]) {
+            identifier = row[key];
+            break;
+          }
+        }
+      }
+      
+      if (identifier) {
+        identifiers.push(identifier.toString().trim());
+      }
+    });
+    
+    const uniqueIdentifiers = [...new Set(identifiers)];
+    
+    if (uniqueIdentifiers.length === 0) {
+      const columnNames = excelData.length > 0 ? Object.keys(excelData[0]) : [];
+      const fs = require('fs');
+      fs.unlinkSync(req.file.path);
+      
+      return res.status(400).json({
+        success: false,
+        message: 'No CardNo or CodeNo found in Excel file',
+        details: {
+          columnsFound: columnNames,
+          supportedColumnNames: identifierFields
+        }
+      });
+    }
+    
+    // Find voters
+    const VoterModel = voterType === 'Voter' ? Voter : VoterFour;
+    const searchField = voterType === 'Voter' ? 'CardNo' : 'CodeNo';
+    
+    const voters = await VoterModel.find({
+      [searchField]: { $in: uniqueIdentifiers }
+    });
+    
+    if (voters.length === 0) {
+      const fs = require('fs');
+      fs.unlinkSync(req.file.path);
+      
+      return res.status(404).json({
+        success: false,
+        message: `No voters found matching the ${searchField} in Excel file`
+      });
+    }
+    
+    const voterIds = voters.map(v => v._id);
+    
+    // Build update object
+    const updateData = { lastUpdated: new Date() };
+    if (typeof isPaid === 'boolean') updateData.isPaid = isPaid;
+    if (typeof isVisited === 'boolean') updateData.isVisited = isVisited;
+    
+    // Update voters
+    const result = await VoterModel.updateMany(
+      { _id: { $in: voterIds } },
+      { $set: updateData }
+    );
+    
+    // Clean up file
+    const fs = require('fs');
+    fs.unlinkSync(req.file.path);
+    
+    res.json({
+      success: true,
+      message: `Successfully updated ${result.modifiedCount} voters from Excel file`,
+      data: {
+        voterType,
+        excelStats: {
+          totalIdentifiersInExcel: uniqueIdentifiers.length,
+          votersFoundInDatabase: voters.length,
+          votersNotFound: uniqueIdentifiers.length - voters.length,
+          updated: result.modifiedCount
+        },
+        updates: {
+          isPaid: typeof isPaid === 'boolean' ? isPaid : 'unchanged',
+          isVisited: typeof isVisited === 'boolean' ? isVisited : 'unchanged'
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('Bulk update status from Excel error:', error);
+    
+    // Clean up file on error
+    if (req.file && req.file.path) {
+      try {
+        const fs = require('fs');
+        fs.unlinkSync(req.file.path);
+      } catch (unlinkError) {
+        console.error('Error deleting file:', unlinkError);
+      }
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: 'Error updating voter statuses from Excel',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   assignVotersToSubAdmin,
   getVotersWithAssignmentStatus,
@@ -1309,5 +1558,7 @@ module.exports = {
   assignSelectedVoters,
   getUnassignedVoters,
   getVoterFilterOptions,
-  getVoterFourFilterOptions
+  getVoterFourFilterOptions,
+  bulkUpdateVoterStatus,
+  bulkUpdateStatusFromExcel
 };
