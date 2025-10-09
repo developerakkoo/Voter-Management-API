@@ -73,7 +73,7 @@ const getAllSurveys = async (req, res) => {
           if (member.voterId && member.voterType) {
             const VoterModel = member.voterType === 'Voter' ? Voter : VoterFour;
             const voterData = await VoterModel.findById(member.voterId)
-              .select('Voter Name Eng Voter Name pno CardNo CodeNo')
+              .select({ 'Voter Name Eng': 1, 'Voter Name': 1, 'pno': 1, 'CardNo': 1, 'CodeNo': 1 })
               .lean();
             member.voterId = voterData || member.voterId;
           }
@@ -139,7 +139,7 @@ const getSurveyById = async (req, res) => {
         if (member.voterId && member.voterType) {
           const VoterModel = member.voterType === 'Voter' ? Voter : VoterFour;
           const voterData = await VoterModel.findById(member.voterId)
-            .select('Voter Name Eng Voter Name pno CardNo CodeNo Address Sex Age')
+            .select({ 'Voter Name Eng': 1, 'Voter Name': 1, 'pno': 1, 'CardNo': 1, 'CodeNo': 1, 'Address': 1, 'Sex': 1, 'Age': 1 })
             .lean();
           member.voterId = voterData || member.voterId;
         }
@@ -737,7 +737,7 @@ const getSurveysBySurveyor = async (req, res) => {
           if (member.voterId && member.voterType) {
             const VoterModel = member.voterType === 'Voter' ? Voter : VoterFour;
             const voterData = await VoterModel.findById(member.voterId)
-              .select('Voter Name Eng Voter Name pno CardNo CodeNo')
+              .select({ 'Voter Name Eng': 1, 'Voter Name': 1, 'pno': 1, 'CardNo': 1, 'CodeNo': 1 })
               .lean();
             member.voterId = voterData || member.voterId;
           }
@@ -824,7 +824,7 @@ const getSurveysByVoter = async (req, res) => {
           if (member.voterId && member.voterType) {
             const VoterModel = member.voterType === 'Voter' ? Voter : VoterFour;
             const voterData = await VoterModel.findById(member.voterId)
-              .select('Voter Name Eng Voter Name pno CardNo CodeNo')
+              .select({ 'Voter Name Eng': 1, 'Voter Name': 1, 'pno': 1, 'CardNo': 1, 'CodeNo': 1 })
               .lean();
             member.voterId = voterData || member.voterId;
           }
@@ -976,12 +976,35 @@ const getSurveyMapData = async (req, res) => {
     const [voters, votersFour] = await Promise.all([
       voterIds.Voter.length > 0
         ? Voter.find({ _id: { $in: voterIds.Voter } })
-            .select('Voter Name Eng Voter Name CardNo pno CodeNo Address Address Eng AC Part Booth')
+            .select({
+              'Voter Name Eng': 1,
+              'Voter Name': 1,
+              'CardNo': 1,
+              'pno': 1,
+              'CodeNo': 1,
+              'Address': 1,
+              'Address Eng': 1,
+              'AC': 1,
+              'Part': 1,
+              'Booth': 1
+            })
             .lean()
         : [],
       voterIds.VoterFour.length > 0
         ? VoterFour.find({ _id: { $in: voterIds.VoterFour } })
-            .select('Voter Name Eng Voter Name CardNo pno CodeNo Address Address Eng AC Part Booth Booth no')
+            .select({
+              'Voter Name Eng': 1,
+              'Voter Name': 1,
+              'CardNo': 1,
+              'pno': 1,
+              'CodeNo': 1,
+              'Address': 1,
+              'Address Eng': 1,
+              'AC': 1,
+              'Part': 1,
+              'Booth': 1,
+              'Booth no': 1
+            })
             .lean()
         : []
     ]);
@@ -990,6 +1013,14 @@ const getSurveyMapData = async (req, res) => {
     const voterMap = {};
     voters.forEach(v => { voterMap[v._id.toString()] = v; });
     votersFour.forEach(v => { voterMap[v._id.toString()] = v; });
+
+    // Debug logging
+    console.log(`Fetched ${voters.length} Voter records and ${votersFour.length} VoterFour records`);
+    console.log(`Created voterMap with ${Object.keys(voterMap).length} entries`);
+    if (surveys.length > 0) {
+      console.log(`First survey voterId: ${surveys[0].voterId}, voterType: ${surveys[0].voterType}`);
+      console.log(`Voter found in map: ${!!voterMap[surveys[0].voterId?.toString()]}`);
+    }
 
     // Process surveys with populated voter data
     for (const survey of surveys) {
@@ -1003,6 +1034,25 @@ const getSurveyMapData = async (req, res) => {
 
       // Get voter from map
       const voter = survey.voterId ? voterMap[survey.voterId.toString()] : null;
+      
+      // Debug log for first few surveys
+      if (batchCount <= 3) {
+        console.log(`Survey ${batchCount}:`, {
+          surveyId: survey._id,
+          voterId: survey.voterId,
+          voterType: survey.voterType,
+          voterFound: !!voter,
+          voterFields: voter ? Object.keys(voter) : []
+        });
+        if (voter) {
+          console.log('Voter data:', {
+            'Voter Name Eng': voter['Voter Name Eng'],
+            'Voter Name': voter['Voter Name'],
+            CardNo: voter.CardNo,
+            pno: voter.pno
+          });
+        }
+      }
       
       // Get voter identifier (CardNo, pno, or CodeNo)
       let voterIdentifier = '';
