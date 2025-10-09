@@ -620,19 +620,63 @@ const assignVotersFromExcel = async (req, res) => {
     const excelReader = new ExcelReader(req.file.path);
     const { data: excelData } = excelReader.excelToJson(req.file.originalname);
     
-    // Extract CardNo or CodeNo from Excel
+    // Extract CardNo or CodeNo from Excel with multiple column name variations
     const identifiers = [];
+    const identifierFields = [
+      'CardNo', 'Card No', 'Cardno', 'cardno', 'CARDNO', 'Card no',
+      'CodeNo', 'Code No', 'Codeno', 'codeno', 'CODENO', 'Code no',
+      'VoterID', 'Voter ID', 'VoterId', 'voterId', 'voter_id',
+      'EPIC', 'epic', 'Epic'
+    ];
+    
     excelData.forEach((row) => {
-      const identifier = row.CardNo || row.CodeNo || row['Card No'] || row['Code No'];
-      if (identifier && identifier.trim()) {
-        identifiers.push(identifier.trim());
+      let identifier = null;
+      
+      // Try to find identifier in any of the supported column names
+      for (const field of identifierFields) {
+        if (row[field]) {
+          identifier = row[field];
+          break;
+        }
+      }
+      
+      // Also check if any key in the row contains 'card' or 'code'
+      if (!identifier) {
+        const keys = Object.keys(row);
+        for (const key of keys) {
+          const lowerKey = key.toLowerCase();
+          if ((lowerKey.includes('card') || lowerKey.includes('code') || lowerKey.includes('epic')) && row[key]) {
+            identifier = row[key];
+            break;
+          }
+        }
+      }
+      
+      if (identifier) {
+        const cleanId = identifier.toString().trim();
+        if (cleanId) {
+          identifiers.push(cleanId);
+        }
       }
     });
     
-    if (identifiers.length === 0) {
+    // Remove duplicates
+    const uniqueIdentifiers = [...new Set(identifiers)];
+    
+    if (uniqueIdentifiers.length === 0) {
+      // Get column names from first row for debugging
+      const columnNames = excelData.length > 0 ? Object.keys(excelData[0]) : [];
+      
       return res.status(400).json({
         success: false,
-        message: 'No CardNo or CodeNo found in Excel file. Please ensure the Excel has CardNo (for Voter) or CodeNo (for VoterFour) column.'
+        message: 'No CardNo or CodeNo found in Excel file. Please ensure the Excel has a column named CardNo (for Voter) or CodeNo (for VoterFour).',
+        details: {
+          columnsFound: columnNames,
+          supportedColumnNames: [
+            'CardNo', 'Card No', 'CodeNo', 'Code No', 'VoterID', 'Voter ID', 'EPIC'
+          ],
+          hint: 'Check if your column name matches one of the supported names (case-insensitive)'
+        }
       });
     }
     
@@ -1049,6 +1093,208 @@ const assignSelectedVoters = async (req, res) => {
   }
 };
 
+// GET /api/assignment/unassigned/:voterType - Get unassigned voters for a specific sub-admin
+const getUnassignedVoters = async (req, res) => {
+  try {
+    const { voterType } = req.params;
+    const {
+      subAdminId,
+      page = 1,
+      limit = 50,
+      sortBy = 'Voter Name Eng',
+      sortOrder = 'asc',
+      search,
+      AC,
+      Booth,
+      pno,
+      Part,
+      Sex,
+      ageMin,
+      ageMax
+    } = req.query;
+    
+    // Validate required fields
+    if (!subAdminId) {
+      return res.status(400).json({
+        success: false,
+        message: 'subAdminId query parameter is required'
+      });
+    }
+    
+    // Validate voter type
+    if (!['Voter', 'VoterFour'].includes(voterType)) {
+      return res.status(400).json({
+        success: false,
+        message: 'voterType must be either "Voter" or "VoterFour"'
+      });
+    }
+    
+    // Check if sub admin exists
+    const subAdmin = await SubAdmin.findById(subAdminId);
+    if (!subAdmin) {
+      return res.status(404).json({
+        success: false,
+        message: 'Sub-admin not found'
+      });
+    }
+    
+    // Get all assigned voter IDs for this sub-admin
+    const assignedVoterIds = await VoterAssignment.find({
+      subAdminId,
+      voterType,
+      isActive: true
+    }).distinct('voterId');
+    
+    // Select the appropriate model
+    const VoterModel = voterType === 'Voter' ? Voter : VoterFour;
+    
+    // Build query for unassigned voters
+    const query = {
+      _id: { $nin: assignedVoterIds },
+      isActive: true
+    };
+    
+    // Add search filter
+    if (search) {
+      query.$or = [
+        { 'Voter Name Eng': { $regex: search, $options: 'i' } },
+        { 'Voter Name': { $regex: search, $options: 'i' } },
+        { 'Relative Name Eng': { $regex: search, $options: 'i' } },
+        { 'Relative Name': { $regex: search, $options: 'i' } },
+        { 'Address Eng': { $regex: search, $options: 'i' } },
+        { 'Address': { $regex: search, $options: 'i' } },
+        { 'CardNo': { $regex: search, $options: 'i' } },
+        { 'CodeNo': { $regex: search, $options: 'i' } }
+      ];
+    }
+    
+    // Add filters
+    if (AC) query.AC = AC;
+    if (Booth) {
+      const boothField = voterType === 'Voter' ? 'Booth' : 'Booth no';
+      query[boothField] = Booth;
+    }
+    if (pno) query.pno = pno;
+    if (Part) query.Part = Part;
+    if (Sex) query.Sex = Sex;
+    
+    // Add age range filter
+    if (ageMin || ageMax) {
+      query.Age = {};
+      if (ageMin) query.Age.$gte = parseInt(ageMin);
+      if (ageMax) query.Age.$lte = parseInt(ageMax);
+    }
+    
+    // Calculate pagination
+    const pageNum = parseInt(page);
+    const limitNum = Math.min(parseInt(limit), 1000); // Max 1000
+    const skip = (pageNum - 1) * limitNum;
+    
+    // Sort options
+    const sortOptions = {};
+    sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
+    
+    // Execute query
+    const [voters, totalCount] = await Promise.all([
+      VoterModel.find(query)
+        .sort(sortOptions)
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      VoterModel.countDocuments(query)
+    ]);
+    
+    const totalPages = Math.ceil(totalCount / limitNum);
+    
+    res.json({
+      success: true,
+      data: voters,
+      pagination: {
+        currentPage: pageNum,
+        totalPages,
+        totalCount,
+        limit: limitNum,
+        hasNextPage: pageNum < totalPages,
+        hasPrevPage: pageNum > 1
+      }
+    });
+    
+  } catch (error) {
+    console.error('Get unassigned voters error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error loading unassigned voters',
+      error: error.message
+    });
+  }
+};
+
+// GET /api/voter/filter-options - Get filter options for Voter type
+const getVoterFilterOptions = async (req, res) => {
+  try {
+    const [ACs, Booths, pnos, Parts] = await Promise.all([
+      Voter.distinct('AC', { isActive: true }),
+      Voter.distinct('Booth', { isActive: true }),
+      Voter.distinct('pno', { isActive: true }),
+      Voter.distinct('Part', { isActive: true })
+    ]);
+    
+    res.json({
+      success: true,
+      data: {
+        ACs: ACs.filter(Boolean).sort(),
+        Booths: Booths.filter(Boolean).sort(),
+        pnos: pnos.filter(Boolean).sort((a, b) => {
+          const numA = parseInt(a) || 0;
+          const numB = parseInt(b) || 0;
+          return numA - numB;
+        }),
+        Parts: Parts.filter(Boolean).sort()
+      }
+    });
+  } catch (error) {
+    console.error('Get voter filter options error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error loading filter options',
+      error: error.message
+    });
+  }
+};
+
+// GET /api/voterfour/filter-options - Get filter options for VoterFour type
+const getVoterFourFilterOptions = async (req, res) => {
+  try {
+    const [ACs, Booths, pnos, Parts] = await Promise.all([
+      VoterFour.distinct('AC', { isActive: true }),
+      VoterFour.distinct('Booth no', { isActive: true }),
+      VoterFour.distinct('pno', { isActive: true }),
+      VoterFour.distinct('Part', { isActive: true })
+    ]);
+    
+    res.json({
+      success: true,
+      data: {
+        ACs: ACs.filter(Boolean).sort(),
+        Booths: Booths.filter(Boolean).sort(),
+        pnos: pnos.filter(Boolean).sort((a, b) => {
+          const numA = parseInt(a) || 0;
+          const numB = parseInt(b) || 0;
+          return numA - numB;
+        }),
+        Parts: Parts.filter(Boolean).sort()
+      }
+    });
+  } catch (error) {
+    console.error('Get voterfour filter options error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error loading filter options',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   assignVotersToSubAdmin,
   getVotersWithAssignmentStatus,
@@ -1060,5 +1306,8 @@ module.exports = {
   deleteAssignment,
   assignVotersFromExcel,
   getAssignmentPageData,
-  assignSelectedVoters
+  assignSelectedVoters,
+  getUnassignedVoters,
+  getVoterFilterOptions,
+  getVoterFourFilterOptions
 };

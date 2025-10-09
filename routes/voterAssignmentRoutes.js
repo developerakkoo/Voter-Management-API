@@ -13,7 +13,10 @@ const {
   assignVotersToSubAdmin,
   assignVotersFromExcel,
   getAssignmentPageData,
-  assignSelectedVoters
+  assignSelectedVoters,
+  getUnassignedVoters,
+  getVoterFilterOptions,
+  getVoterFourFilterOptions
 } = require('../controller/voterAssignmentController');
 // const { authenticateToken } = require('../middleware/auth');
 
@@ -46,6 +49,9 @@ const upload = multer({
 
 // GET /api/assignment/assignment-page - Get voters for assignment page with all filters
 router.get('/assignment-page', getAssignmentPageData);
+
+// GET /api/assignment/unassigned/:voterType - Get unassigned voters for a sub-admin
+router.get('/unassigned/:voterType', getUnassignedVoters);
 
 // GET /api/assignment/voters - Get all voters with assignment status (Admin only)
 router.get('/voters', getVotersWithAssignmentStatus);

@@ -13,6 +13,11 @@ const {
   searchVoterFour
 } = require('../controller/voterFourController');
 
+const { getVoterFourFilterOptions } = require('../controller/voterAssignmentController');
+
+// GET /api/voterfour/filter-options - Get filter options for dropdowns
+router.get('/filter-options', getVoterFourFilterOptions);
+
 // GET /api/voterfour/stats - Get statistics for isPaid and isVisited
 router.get('/stats', getVoterFourStats);
 
