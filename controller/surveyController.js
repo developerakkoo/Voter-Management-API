@@ -955,13 +955,44 @@ const getSurveyMapData = async (req, res) => {
     let totalProcessed = 0;
     let batchCount = 0;
 
-    // Create cursor for streaming
-    const cursor = Survey.find(filter)
+    // Fetch all surveys first
+    const surveys = await Survey.find(filter)
       .populate('surveyorId', 'fullName userId pno')
-      .cursor();
+      .lean();
 
-    // Process surveys in batches
-    for await (const survey of cursor) {
+    // Group voter IDs by type for batch fetching
+    const voterIds = { Voter: [], VoterFour: [] };
+    surveys.forEach(survey => {
+      if (survey.voterId && survey.voterType) {
+        if (survey.voterType === 'Voter') {
+          voterIds.Voter.push(survey.voterId);
+        } else if (survey.voterType === 'VoterFour') {
+          voterIds.VoterFour.push(survey.voterId);
+        }
+      }
+    });
+
+    // Batch fetch all voters
+    const [voters, votersFour] = await Promise.all([
+      voterIds.Voter.length > 0
+        ? Voter.find({ _id: { $in: voterIds.Voter } })
+            .select('Voter Name Eng Voter Name CardNo pno CodeNo Address Address Eng AC Part Booth')
+            .lean()
+        : [],
+      voterIds.VoterFour.length > 0
+        ? VoterFour.find({ _id: { $in: voterIds.VoterFour } })
+            .select('Voter Name Eng Voter Name CardNo pno CodeNo Address Address Eng AC Part Booth Booth no')
+            .lean()
+        : []
+    ]);
+
+    // Create voter lookup map
+    const voterMap = {};
+    voters.forEach(v => { voterMap[v._id.toString()] = v; });
+    votersFour.forEach(v => { voterMap[v._id.toString()] = v; });
+
+    // Process surveys with populated voter data
+    for (const survey of surveys) {
       batchCount++;
       
       // Add comma separator for batches (except first)
@@ -970,19 +1001,8 @@ const getSurveyMapData = async (req, res) => {
       }
       isFirstBatch = false;
 
-      // Manually populate voter data based on voterType
-      let voter = null;
-      if (survey.voterId && survey.voterType) {
-        try {
-          const VoterModel = survey.voterType === 'Voter' ? Voter : VoterFour;
-          voter = await VoterModel.findById(survey.voterId)
-            .select('Voter Name Eng Voter Name CardNo pno CodeNo Address Address Eng AC Part Booth Booth no')
-            .lean();
-        } catch (err) {
-          console.error('Error populating voter:', err);
-          voter = null;
-        }
-      }
+      // Get voter from map
+      const voter = survey.voterId ? voterMap[survey.voterId.toString()] : null;
       
       // Get voter identifier (CardNo, pno, or CodeNo)
       let voterIdentifier = '';
@@ -1051,11 +1071,6 @@ const getSurveyMapData = async (req, res) => {
       // Optional: Add progress indicator every 1000 records
       if (totalProcessed % 1000 === 0) {
         console.log(`Processed ${totalProcessed} surveys...`);
-      }
-
-      // Optional: Add delay for very large datasets to prevent overwhelming
-      if (totalProcessed % parseInt(batchSize) === 0) {
-        await new Promise(resolve => setTimeout(resolve, 10)); // 10ms delay
       }
     }
 
