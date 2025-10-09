@@ -957,7 +957,6 @@ const getSurveyMapData = async (req, res) => {
 
     // Create cursor for streaming
     const cursor = Survey.find(filter)
-      .populate('voterId', 'Voter Name Eng Voter Name CardNo pno CodeNo Address Address Eng AC Part Booth')
       .populate('surveyorId', 'fullName userId pno')
       .cursor();
 
@@ -971,7 +970,19 @@ const getSurveyMapData = async (req, res) => {
       }
       isFirstBatch = false;
 
-      const voter = survey.voterId;
+      // Manually populate voter data based on voterType
+      let voter = null;
+      if (survey.voterId && survey.voterType) {
+        try {
+          const VoterModel = survey.voterType === 'Voter' ? Voter : VoterFour;
+          voter = await VoterModel.findById(survey.voterId)
+            .select('Voter Name Eng Voter Name CardNo pno CodeNo Address Address Eng AC Part Booth Booth no')
+            .lean();
+        } catch (err) {
+          console.error('Error populating voter:', err);
+          voter = null;
+        }
+      }
       
       // Get voter identifier (CardNo, pno, or CodeNo)
       let voterIdentifier = '';
@@ -1004,7 +1015,7 @@ const getSurveyMapData = async (req, res) => {
       // Create survey object for streaming
       const surveyData = {
         surveyId: survey._id,
-        voterId: survey.voterId ? survey.voterId._id : null,
+        voterId: survey.voterId || null,
         voterType: survey.voterType,
         voterName: voterName,
         voterIdentifier: voterIdentifier,
