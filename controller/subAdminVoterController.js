@@ -1014,6 +1014,206 @@ const getAssignedVotersMapData = async (req, res) => {
   }
 };
 
+// GET /api/subadmin/voters/surveys - Get all surveys for assigned voters
+const getAssignedVotersSurveys = async (req, res) => {
+  try {
+    // Get subAdminId from either auth middleware or query parameter
+    const subAdminId = req.subAdminId || req.query.subAdminId;
+    const { 
+      page = 1,
+      limit = 20,
+      voterType = 'all',
+      status,
+      dateFrom,
+      dateTo,
+      sortBy = 'createdAt',
+      sortOrder = 'desc'
+    } = req.query;
+    
+    // Validate subAdminId
+    if (!subAdminId) {
+      return res.status(400).json({
+        success: false,
+        message: 'subAdminId is required (provide as query parameter or use authentication)'
+      });
+    }
+    
+    const Survey = require('../models/Survey');
+    
+    // Build assignment filter
+    const assignmentFilter = { subAdminId, isActive: true };
+    if (voterType !== 'all') {
+      assignmentFilter.voterType = voterType;
+    }
+    
+    // Get all assignments for this sub-admin
+    const assignments = await VoterAssignment.find(assignmentFilter)
+      .select('voterId voterType')
+      .lean();
+    
+    if (assignments.length === 0) {
+      return res.json({
+        success: true,
+        data: [],
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: 0,
+          totalCount: 0,
+          hasNextPage: false,
+          hasPrevPage: false,
+          limit: parseInt(limit)
+        },
+        meta: {
+          totalVoters: 0,
+          totalSurveys: 0,
+          message: 'No voters assigned to this sub-admin'
+        }
+      });
+    }
+    
+    // Group voter IDs by type
+    const voterIdsByType = { Voter: [], VoterFour: [] };
+    assignments.forEach(assignment => {
+      if (assignment.voterType === 'Voter') {
+        voterIdsByType.Voter.push(assignment.voterId);
+      } else if (assignment.voterType === 'VoterFour') {
+        voterIdsByType.VoterFour.push(assignment.voterId);
+      }
+    });
+    
+    const allVoterIds = [...voterIdsByType.Voter, ...voterIdsByType.VoterFour];
+    
+    // Build survey filter
+    const surveyFilter = {
+      voterId: { $in: allVoterIds }
+    };
+    
+    // Add status filter if provided
+    if (status) {
+      surveyFilter.status = status;
+    }
+    
+    // Add date range filter
+    if (dateFrom || dateTo) {
+      surveyFilter.createdAt = {};
+      if (dateFrom) surveyFilter.createdAt.$gte = new Date(dateFrom);
+      if (dateTo) surveyFilter.createdAt.$lte = new Date(dateTo);
+    }
+    
+    // Calculate pagination
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+    
+    // Sort options
+    const sortOptions = {};
+    sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
+    
+    // Fetch surveys with pagination
+    const [surveys, totalCount] = await Promise.all([
+      Survey.find(surveyFilter)
+        .select('voterId voterType voterPhoneNumber location status completedAt createdAt members')
+        .sort(sortOptions)
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      Survey.countDocuments(surveyFilter)
+    ]);
+    
+    // Fetch voter data for each survey
+    const surveysWithVoterData = [];
+    
+    for (const survey of surveys) {
+      if (!survey.voterId || !survey.voterType) continue;
+      
+      const VoterModel = survey.voterType === 'Voter' ? Voter : VoterFour;
+      
+      try {
+        const voter = await VoterModel.findById(survey.voterId)
+          .select({
+            'Voter Name Eng': 1,
+            'Voter Name': 1,
+            'AC': 1,
+            'Part': 1,
+            'Booth': 1,
+            'Booth no': 1
+          })
+          .lean();
+        
+        if (voter) {
+          const surveyData = {
+            surveyId: survey._id,
+            voterName: voter['Voter Name Eng'] || voter['Voter Name'] || 'Unknown',
+            voterNameHindi: voter['Voter Name'],
+            phoneNumber: survey.voterPhoneNumber,
+            location: survey.location ? {
+              latitude: survey.location.latitude || null,
+              longitude: survey.location.longitude || null,
+              accuracy: survey.location.accuracy || null,
+              address: survey.location.address || null
+            } : null,
+            members: survey.members ? survey.members.map(member => ({
+              name: member.name || '',
+              age: member.age || 0,
+              phoneNumber: member.phoneNumber || '',
+              relationship: member.relationship || '',
+              isVoter: member.isVoter || false
+            })) : [],
+            membersCount: survey.members ? survey.members.length : 0,
+            status: survey.status,
+            completedAt: survey.completedAt,
+            createdAt: survey.createdAt,
+            voterDetails: {
+              ac: voter.AC,
+              part: voter.Part,
+              booth: voter.Booth || voter['Booth no']
+            }
+          };
+          
+          surveysWithVoterData.push(surveyData);
+        }
+      } catch (err) {
+        console.error('Error populating voter for survey:', survey._id, err);
+      }
+    }
+    
+    const totalPages = Math.ceil(totalCount / limitNum);
+    
+    res.json({
+      success: true,
+      data: surveysWithVoterData,
+      pagination: {
+        currentPage: pageNum,
+        totalPages,
+        totalCount,
+        hasNextPage: pageNum < totalPages,
+        hasPrevPage: pageNum > 1,
+        limit: limitNum
+      },
+      meta: {
+        totalVoters: assignments.length,
+        totalSurveys: totalCount,
+        filters: {
+          voterType,
+          status: status || 'all',
+          dateFrom: dateFrom || null,
+          dateTo: dateTo || null,
+          sortBy,
+          sortOrder
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('Get assigned voters surveys error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching assigned voters surveys',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getAssignedVoters,
   getAssignedVoter,
@@ -1024,5 +1224,6 @@ module.exports = {
   getAssignedVotersStats,
   searchAssignedVoters,
   filterAssignedVoters,
-  getAssignedVotersMapData
+  getAssignedVotersMapData,
+  getAssignedVotersSurveys
 };
