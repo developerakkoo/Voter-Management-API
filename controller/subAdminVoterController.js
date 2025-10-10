@@ -861,13 +861,21 @@ const getAssignedVotersStats = async (req, res) => {
 // GET /api/subadmin/voters/map-data - Get assigned voters with completed surveys for map plotting
 const getAssignedVotersMapData = async (req, res) => {
   try {
-    const subAdminId = req.subAdminId;
+    // Get subAdminId from either auth middleware or query parameter
+    const subAdminId = req.subAdminId || req.query.subAdminId;
     const { 
       voterType = 'all',
-      status = 'completed',
       includeMembers = 'true',
       limit = 1000
     } = req.query;
+    
+    // Validate subAdminId
+    if (!subAdminId) {
+      return res.status(400).json({
+        success: false,
+        message: 'subAdminId is required (provide as query parameter or use authentication)'
+      });
+    }
     
     const Survey = require('../models/Survey');
     
@@ -906,10 +914,9 @@ const getAssignedVotersMapData = async (req, res) => {
     
     const allVoterIds = [...voterIdsByType.Voter, ...voterIdsByType.VoterFour];
     
-    // Build survey filter
+    // Build survey filter - NO status filter, just get all surveys with location
     const surveyFilter = {
       voterId: { $in: allVoterIds },
-      status: status,
       'location.latitude': { $exists: true, $ne: null },
       'location.longitude': { $exists: true, $ne: null }
     };
@@ -991,7 +998,6 @@ const getAssignedVotersMapData = async (req, res) => {
         surveysWithLocation: mapData.length,
         filters: {
           voterType,
-          status,
           includeMembers: includeMembers === 'true',
           limit: parseInt(limit)
         }

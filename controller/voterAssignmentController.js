@@ -1110,7 +1110,8 @@ const getUnassignedVoters = async (req, res) => {
       Part,
       Sex,
       ageMin,
-      ageMax
+      ageMax,
+      surveyDone  // NEW: Filter by survey completion status
     } = req.query;
     
     // Validate required fields
@@ -1185,6 +1186,13 @@ const getUnassignedVoters = async (req, res) => {
       if (ageMax) query.Age.$lte = parseInt(ageMax);
     }
     
+    // NEW: Add survey completion filter
+    if (surveyDone !== undefined) {
+      // Convert string to boolean: 'true' -> true, 'false' -> false
+      const isSurveyDone = surveyDone === 'true' || surveyDone === true;
+      query.surveyDone = isSurveyDone;
+    }
+    
     // Calculate pagination
     const pageNum = parseInt(page);
     const limitNum = Math.min(parseInt(limit), 1000); // Max 1000
@@ -1194,7 +1202,7 @@ const getUnassignedVoters = async (req, res) => {
     const sortOptions = {};
     sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
     
-    // Execute query
+    // Execute query with survey status fields included
     const [voters, totalCount] = await Promise.all([
       VoterModel.find(query)
         .sort(sortOptions)
@@ -1204,11 +1212,19 @@ const getUnassignedVoters = async (req, res) => {
       VoterModel.countDocuments(query)
     ]);
     
+    // NEW: Add survey status info to each voter
+    const votersWithSurveyStatus = voters.map(voter => ({
+      ...voter,
+      hasSurvey: voter.surveyDone || false,  // Boolean flag for easy frontend checks
+      surveyCompleted: voter.surveyDone || false,  // Alias for clarity
+      surveyDate: voter.lastSurveyDate || null
+    }));
+    
     const totalPages = Math.ceil(totalCount / limitNum);
     
     res.json({
       success: true,
-      data: voters,
+      data: votersWithSurveyStatus,
       pagination: {
         currentPage: pageNum,
         totalPages,
