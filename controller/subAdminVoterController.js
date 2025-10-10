@@ -2,7 +2,7 @@ const VoterAssignment = require('../models/VoterAssignment');
 const Voter = require('../models/Voter');
 const VoterFour = require('../models/VoterFour');
 
-// GET /api/subadmin/voters - Get assigned voters for sub admin
+// GET /api/subadmin/voters - Get assigned voters for sub admin with advanced search
 const getAssignedVoters = async (req, res) => {
   try {
     const subAdminId = req.subAdminId;
@@ -12,34 +12,156 @@ const getAssignedVoters = async (req, res) => {
       voterType, 
       isPaid, 
       isVisited,
+      search,
+      q,
+      nameOnly,
+      AC,
+      Part,
+      Booth,
+      Sex,
+      ageMin,
+      ageMax,
+      CardNo,
+      CodeNo,
       sortBy = 'assignedAt',
       sortOrder = 'desc'
     } = req.query;
     
     const skip = (parseInt(page) - 1) * parseInt(limit);
+    const searchTerm = search || q;
     
     // Build filter criteria for assignments
     const assignmentFilter = { subAdminId, isActive: true };
     if (voterType) assignmentFilter.voterType = voterType;
     
-    // Get assignments with voter data
-    const assignments = await VoterAssignment.find(assignmentFilter)
-      .populate({
-        path: 'voterId',
-        match: {
-          ...(isPaid !== undefined && { isPaid: isPaid === 'true' }),
-          ...(isVisited !== undefined && { isVisited: isVisited === 'true' })
+    // Get all assignments for this sub-admin first
+    const allAssignments = await VoterAssignment.find(assignmentFilter).lean();
+    
+    if (allAssignments.length === 0) {
+      return res.json({
+        success: true,
+        data: [],
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: 0,
+          totalCount: 0,
+          hasNextPage: false,
+          hasPrevPage: false,
+          limit: parseInt(limit)
         }
-      })
-      .lean();
+      });
+    }
     
-    // Filter out assignments where voter was not found or doesn't match criteria
-    const validAssignments = assignments.filter(assignment => assignment.voterId);
+    // Group voter IDs by type
+    const voterIdsByType = { Voter: [], VoterFour: [] };
+    allAssignments.forEach(assignment => {
+      if (assignment.voterType === 'Voter') {
+        voterIdsByType.Voter.push(assignment.voterId);
+      } else if (assignment.voterType === 'VoterFour') {
+        voterIdsByType.VoterFour.push(assignment.voterId);
+      }
+    });
     
-    // Sort assignments
-    validAssignments.sort((a, b) => {
-      const aValue = a[sortBy];
-      const bValue = b[sortBy];
+    // Build voter filter with advanced search
+    const buildVoterFilter = (voterIds) => {
+      const voterFilter = { _id: { $in: voterIds } };
+      
+      // Status filters
+      if (isPaid !== undefined) voterFilter.isPaid = isPaid === 'true';
+      if (isVisited !== undefined) voterFilter.isVisited = isVisited === 'true';
+      
+      // Advanced search
+      if (searchTerm) {
+        if (nameOnly === 'true') {
+          // Search only in name fields
+          voterFilter.$or = [
+            { 'Voter Name Eng': { $regex: searchTerm, $options: 'i' } },
+            { 'Voter Name': { $regex: searchTerm, $options: 'i' } },
+            { 'Relative Name Eng': { $regex: searchTerm, $options: 'i' } },
+            { 'Relative Name': { $regex: searchTerm, $options: 'i' } }
+          ];
+        } else {
+          // Search in all fields
+          voterFilter.$or = [
+            { 'Voter Name Eng': { $regex: searchTerm, $options: 'i' } },
+            { 'Voter Name': { $regex: searchTerm, $options: 'i' } },
+            { 'Relative Name Eng': { $regex: searchTerm, $options: 'i' } },
+            { 'Relative Name': { $regex: searchTerm, $options: 'i' } },
+            { 'Address': { $regex: searchTerm, $options: 'i' } },
+            { 'Address Eng': { $regex: searchTerm, $options: 'i' } },
+            { 'Booth': { $regex: searchTerm, $options: 'i' } },
+            { 'Booth Eng': { $regex: searchTerm, $options: 'i' } },
+            { 'CardNo': { $regex: searchTerm, $options: 'i' } },
+            { 'CodeNo': { $regex: searchTerm, $options: 'i' } }
+          ];
+        }
+      }
+      
+      // Specific field filters
+      if (AC) voterFilter.AC = { $regex: AC, $options: 'i' };
+      if (Part) voterFilter.Part = { $regex: Part, $options: 'i' };
+      if (Booth) voterFilter.Booth = { $regex: Booth, $options: 'i' };
+      if (Sex) voterFilter.Sex = Sex;
+      if (CardNo) voterFilter.CardNo = { $regex: CardNo, $options: 'i' };
+      if (CodeNo) voterFilter.CodeNo = { $regex: CodeNo, $options: 'i' };
+      
+      // Age range filter
+      if (ageMin || ageMax) {
+        voterFilter.Age = {};
+        if (ageMin) voterFilter.Age.$gte = parseInt(ageMin);
+        if (ageMax) voterFilter.Age.$lte = parseInt(ageMax);
+      }
+      
+      return voterFilter;
+    };
+    
+    // Fetch voters from both collections
+    const [voters, votersFour] = await Promise.all([
+      voterIdsByType.Voter.length > 0
+        ? Voter.find(buildVoterFilter(voterIdsByType.Voter)).lean()
+        : [],
+      voterIdsByType.VoterFour.length > 0
+        ? VoterFour.find(buildVoterFilter(voterIdsByType.VoterFour)).lean()
+        : []
+    ]);
+    
+    // Create assignment map
+    const assignmentMap = {};
+    allAssignments.forEach(assignment => {
+      assignmentMap[assignment.voterId.toString()] = {
+        assignmentId: assignment._id,
+        assignedAt: assignment.assignedAt,
+        notes: assignment.notes,
+        voterType: assignment.voterType
+      };
+    });
+    
+    // Combine voters with assignment data
+    const combinedResults = [
+      ...voters.map(v => ({
+        ...v,
+        voterType: 'Voter',
+        assignmentInfo: assignmentMap[v._id.toString()]
+      })),
+      ...votersFour.map(v => ({
+        ...v,
+        voterType: 'VoterFour',
+        assignmentInfo: assignmentMap[v._id.toString()]
+      }))
+    ];
+    
+    // Sort by the specified field
+    combinedResults.sort((a, b) => {
+      let aValue, bValue;
+      
+      if (sortBy === 'assignedAt') {
+        aValue = a.assignmentInfo?.assignedAt;
+        bValue = b.assignmentInfo?.assignedAt;
+      } else {
+        aValue = a[sortBy];
+        bValue = b[sortBy];
+      }
+      
       const multiplier = sortOrder === 'desc' ? -1 : 1;
       
       if (aValue < bValue) return -1 * multiplier;
@@ -48,14 +170,13 @@ const getAssignedVoters = async (req, res) => {
     });
     
     // Apply pagination
-    const totalCount = validAssignments.length;
-    const paginatedAssignments = validAssignments.slice(skip, skip + parseInt(limit));
-    
+    const totalCount = combinedResults.length;
+    const paginatedResults = combinedResults.slice(skip, skip + parseInt(limit));
     const totalPages = Math.ceil(totalCount / parseInt(limit));
     
     res.json({
       success: true,
-      data: paginatedAssignments,
+      data: paginatedResults,
       pagination: {
         currentPage: parseInt(page),
         totalPages,
@@ -737,6 +858,156 @@ const getAssignedVotersStats = async (req, res) => {
   }
 };
 
+// GET /api/subadmin/voters/map-data - Get assigned voters with completed surveys for map plotting
+const getAssignedVotersMapData = async (req, res) => {
+  try {
+    const subAdminId = req.subAdminId;
+    const { 
+      voterType = 'all',
+      status = 'completed',
+      includeMembers = 'true',
+      limit = 1000
+    } = req.query;
+    
+    const Survey = require('../models/Survey');
+    
+    // Build assignment filter
+    const assignmentFilter = { subAdminId, isActive: true };
+    if (voterType !== 'all') {
+      assignmentFilter.voterType = voterType;
+    }
+    
+    // Get all assignments for this sub-admin
+    const assignments = await VoterAssignment.find(assignmentFilter)
+      .select('voterId voterType')
+      .lean();
+    
+    if (assignments.length === 0) {
+      return res.json({
+        success: true,
+        data: [],
+        meta: {
+          totalVoters: 0,
+          totalSurveys: 0,
+          message: 'No voters assigned to this sub-admin'
+        }
+      });
+    }
+    
+    // Group voter IDs by type
+    const voterIdsByType = { Voter: [], VoterFour: [] };
+    assignments.forEach(assignment => {
+      if (assignment.voterType === 'Voter') {
+        voterIdsByType.Voter.push(assignment.voterId);
+      } else if (assignment.voterType === 'VoterFour') {
+        voterIdsByType.VoterFour.push(assignment.voterId);
+      }
+    });
+    
+    const allVoterIds = [...voterIdsByType.Voter, ...voterIdsByType.VoterFour];
+    
+    // Build survey filter
+    const surveyFilter = {
+      voterId: { $in: allVoterIds },
+      status: status,
+      'location.latitude': { $exists: true, $ne: null },
+      'location.longitude': { $exists: true, $ne: null }
+    };
+    
+    // Fetch surveys with location data
+    const surveys = await Survey.find(surveyFilter)
+      .populate('surveyorId', 'fullName userId pno')
+      .limit(parseInt(limit))
+      .lean();
+    
+    // Fetch voter data for each survey
+    const mapData = [];
+    
+    for (const survey of surveys) {
+      if (!survey.voterId || !survey.voterType) continue;
+      
+      const VoterModel = survey.voterType === 'Voter' ? Voter : VoterFour;
+      
+      try {
+        const voter = await VoterModel.findById(survey.voterId).lean();
+        
+        if (voter) {
+          const mapPoint = {
+            surveyId: survey._id,
+            voterId: survey.voterId,
+            voterType: survey.voterType,
+            voterName: voter['Voter Name Eng'] || voter['Voter Name'] || 'Unknown',
+            voterNameHindi: voter['Voter Name'],
+            ac: voter.AC,
+            part: voter.Part,
+            booth: voter.Booth || voter['Booth no'],
+            phoneNumber: survey.voterPhoneNumber,
+            location: {
+              lat: survey.location.latitude,
+              lng: survey.location.longitude,
+              accuracy: survey.location.accuracy || null
+            },
+            surveyor: {
+              id: survey.surveyorId?._id || null,
+              name: survey.surveyorId?.fullName || 'Unknown',
+              userId: survey.surveyorId?.userId || '',
+              pno: survey.surveyorId?.pno || ''
+            },
+            status: survey.status,
+            completedAt: survey.completedAt,
+            createdAt: survey.createdAt
+          };
+          
+          // Add members if requested
+          if (includeMembers === 'true' && survey.members && survey.members.length > 0) {
+            mapPoint.members = survey.members.map(member => ({
+              name: member.name || '',
+              age: member.age || 0,
+              phoneNumber: member.phoneNumber || '',
+              relationship: member.relationship || '',
+              isVoter: member.isVoter || false,
+              voterId: member.voterId || null,
+              voterType: member.voterType || null
+            }));
+            mapPoint.membersCount = survey.members.length;
+          } else {
+            mapPoint.members = [];
+            mapPoint.membersCount = 0;
+          }
+          
+          mapData.push(mapPoint);
+        }
+      } catch (err) {
+        console.error('Error populating voter for survey:', survey._id, err);
+      }
+    }
+    
+    res.json({
+      success: true,
+      data: mapData,
+      meta: {
+        totalVoters: assignments.length,
+        totalSurveys: mapData.length,
+        surveysWithLocation: mapData.length,
+        filters: {
+          voterType,
+          status,
+          includeMembers: includeMembers === 'true',
+          limit: parseInt(limit)
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('Get assigned voters map data error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching assigned voters map data',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getAssignedVoters,
   getAssignedVoter,
@@ -746,5 +1017,6 @@ module.exports = {
   updateAssignedVoterStatus,
   getAssignedVotersStats,
   searchAssignedVoters,
-  filterAssignedVoters
+  filterAssignedVoters,
+  getAssignedVotersMapData
 };

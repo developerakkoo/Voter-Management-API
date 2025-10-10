@@ -719,9 +719,369 @@ const streamAllVotersCombined = async (req, res) => {
   }
 };
 
+// GET /api/voters/merged/:voterId/:voterType - Get a single voter from either collection
+const getMergedVoter = async (req, res) => {
+  try {
+    const { voterId, voterType } = req.params;
+    
+    // Validate voter type
+    if (!['Voter', 'VoterFour'].includes(voterType)) {
+      return res.status(400).json({
+        success: false,
+        message: 'voterType must be either "Voter" or "VoterFour"'
+      });
+    }
+    
+    const VoterModel = voterType === 'Voter' ? Voter : VoterFour;
+    const voter = await VoterModel.findById(voterId);
+    
+    if (!voter) {
+      return res.status(404).json({
+        success: false,
+        message: `${voterType} not found`
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        ...voter.toObject(),
+        voterType: voterType
+      }
+    });
+  } catch (error) {
+    console.error('Get merged voter error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching voter',
+      error: error.message
+    });
+  }
+};
+
+// PUT /api/voters/merged/:voterId/:voterType - Update a voter in either collection
+const updateMergedVoter = async (req, res) => {
+  try {
+    const { voterId, voterType } = req.params;
+    const updateData = req.body;
+    
+    // Validate voter type
+    if (!['Voter', 'VoterFour'].includes(voterType)) {
+      return res.status(400).json({
+        success: false,
+        message: 'voterType must be either "Voter" or "VoterFour"'
+      });
+    }
+    
+    // Remove fields that shouldn't be updated
+    delete updateData._id;
+    delete updateData.createdAt;
+    
+    const VoterModel = voterType === 'Voter' ? Voter : VoterFour;
+    const updatedVoter = await VoterModel.findByIdAndUpdate(
+      voterId,
+      { ...updateData, lastUpdated: new Date() },
+      { new: true, runValidators: true }
+    );
+    
+    if (!updatedVoter) {
+      return res.status(404).json({
+        success: false,
+        message: `${voterType} not found`
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: `${voterType} updated successfully`,
+      data: {
+        ...updatedVoter.toObject(),
+        voterType: voterType
+      }
+    });
+  } catch (error) {
+    console.error('Update merged voter error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error updating voter',
+      error: error.message
+    });
+  }
+};
+
+// PATCH /api/voters/merged/:voterId/:voterType/status - Update status for either voter type
+const updateMergedVoterStatus = async (req, res) => {
+  try {
+    const { voterId, voterType } = req.params;
+    const { isPaid, isVisited } = req.body;
+    
+    // Validate voter type
+    if (!['Voter', 'VoterFour'].includes(voterType)) {
+      return res.status(400).json({
+        success: false,
+        message: 'voterType must be either "Voter" or "VoterFour"'
+      });
+    }
+    
+    // Validate at least one status field
+    if (typeof isPaid !== 'boolean' && typeof isVisited !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        message: 'At least one status field (isPaid or isVisited) must be provided'
+      });
+    }
+    
+    const updateData = { lastUpdated: new Date() };
+    if (typeof isPaid === 'boolean') updateData.isPaid = isPaid;
+    if (typeof isVisited === 'boolean') updateData.isVisited = isVisited;
+    
+    const VoterModel = voterType === 'Voter' ? Voter : VoterFour;
+    const voter = await VoterModel.findByIdAndUpdate(
+      voterId,
+      updateData,
+      { new: true, runValidators: true }
+    );
+    
+    if (!voter) {
+      return res.status(404).json({
+        success: false,
+        message: `${voterType} not found`
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: `${voterType} status updated successfully`,
+      data: {
+        _id: voter._id,
+        'Voter Name Eng': voter['Voter Name Eng'],
+        voterType: voterType,
+        isPaid: voter.isPaid,
+        isVisited: voter.isVisited,
+        lastUpdated: voter.lastUpdated
+      }
+    });
+  } catch (error) {
+    console.error('Update merged voter status error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error updating status',
+      error: error.message
+    });
+  }
+};
+
+// DELETE /api/voters/merged/:voterId/:voterType - Delete a voter from either collection
+const deleteMergedVoter = async (req, res) => {
+  try {
+    const { voterId, voterType } = req.params;
+    
+    // Validate voter type
+    if (!['Voter', 'VoterFour'].includes(voterType)) {
+      return res.status(400).json({
+        success: false,
+        message: 'voterType must be either "Voter" or "VoterFour"'
+      });
+    }
+    
+    const VoterModel = voterType === 'Voter' ? Voter : VoterFour;
+    const deletedVoter = await VoterModel.findByIdAndDelete(voterId);
+    
+    if (!deletedVoter) {
+      return res.status(404).json({
+        success: false,
+        message: `${voterType} not found`
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: `${voterType} deleted successfully`,
+      data: {
+        voterId: deletedVoter._id,
+        voterType: voterType,
+        voterName: deletedVoter['Voter Name Eng']
+      }
+    });
+  } catch (error) {
+    console.error('Delete merged voter error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting voter',
+      error: error.message
+    });
+  }
+};
+
+// POST /api/voters/merged/search - Advanced search across both collections
+const searchMergedVoters = async (req, res) => {
+  try {
+    const {
+      search,
+      voterType = 'all',
+      page = 1,
+      limit = 50,
+      sortBy = 'Voter Name Eng',
+      sortOrder = 'asc',
+      AC,
+      Part,
+      Booth,
+      Sex,
+      ageMin,
+      ageMax,
+      isPaid,
+      isVisited,
+      CardNo,
+      CodeNo,
+      nameOnly = false
+    } = req.body;
+    
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    // Build base filter
+    const buildFilter = () => {
+      const filter = {};
+      
+      // Status filters
+      if (isPaid !== undefined) filter.isPaid = isPaid;
+      if (isVisited !== undefined) filter.isVisited = isVisited;
+      
+      // Location filters
+      if (AC) filter.AC = { $regex: AC, $options: 'i' };
+      if (Part) filter.Part = { $regex: Part, $options: 'i' };
+      if (Booth) filter.Booth = { $regex: Booth, $options: 'i' };
+      if (Sex) filter.Sex = Sex;
+      
+      // Identifier filters
+      if (CardNo) filter.CardNo = { $regex: CardNo, $options: 'i' };
+      if (CodeNo) filter.CodeNo = { $regex: CodeNo, $options: 'i' };
+      
+      // Age range
+      if (ageMin || ageMax) {
+        filter.Age = {};
+        if (ageMin) filter.Age.$gte = parseInt(ageMin);
+        if (ageMax) filter.Age.$lte = parseInt(ageMax);
+      }
+      
+      // Search filter
+      if (search) {
+        if (nameOnly) {
+          filter.$or = [
+            { 'Voter Name Eng': { $regex: search, $options: 'i' } },
+            { 'Voter Name': { $regex: search, $options: 'i' } },
+            { 'Relative Name Eng': { $regex: search, $options: 'i' } },
+            { 'Relative Name': { $regex: search, $options: 'i' } }
+          ];
+        } else {
+          filter.$or = [
+            { 'Voter Name Eng': { $regex: search, $options: 'i' } },
+            { 'Voter Name': { $regex: search, $options: 'i' } },
+            { 'Relative Name Eng': { $regex: search, $options: 'i' } },
+            { 'Relative Name': { $regex: search, $options: 'i' } },
+            { 'Address': { $regex: search, $options: 'i' } },
+            { 'Address Eng': { $regex: search, $options: 'i' } },
+            { 'Booth': { $regex: search, $options: 'i' } },
+            { 'Booth Eng': { $regex: search, $options: 'i' } },
+            { 'CardNo': { $regex: search, $options: 'i' } },
+            { 'CodeNo': { $regex: search, $options: 'i' } }
+          ];
+        }
+      }
+      
+      return filter;
+    };
+    
+    const filter = buildFilter();
+    const sortOptions = {};
+    sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
+    
+    let results = [];
+    let totalCount = 0;
+    
+    // Search Voter collection
+    if (voterType === 'all' || voterType === 'Voter') {
+      const [voters, count] = await Promise.all([
+        Voter.find(filter)
+          .sort(sortOptions)
+          .skip(voterType === 'all' ? 0 : skip)
+          .limit(voterType === 'all' ? Math.ceil(parseInt(limit) / 2) : parseInt(limit))
+          .lean(),
+        Voter.countDocuments(filter)
+      ]);
+      
+      results = results.concat(voters.map(v => ({ ...v, voterType: 'Voter' })));
+      totalCount += count;
+    }
+    
+    // Search VoterFour collection
+    if (voterType === 'all' || voterType === 'VoterFour') {
+      const [votersFour, count] = await Promise.all([
+        VoterFour.find(filter)
+          .sort(sortOptions)
+          .skip(voterType === 'all' ? 0 : skip)
+          .limit(voterType === 'all' ? Math.ceil(parseInt(limit) / 2) : parseInt(limit))
+          .lean(),
+        VoterFour.countDocuments(filter)
+      ]);
+      
+      results = results.concat(votersFour.map(v => ({ ...v, voterType: 'VoterFour' })));
+      totalCount += count;
+    }
+    
+    // If searching both, apply pagination to combined results
+    if (voterType === 'all') {
+      results = results.slice(skip, skip + parseInt(limit));
+    }
+    
+    const totalPages = Math.ceil(totalCount / parseInt(limit));
+    
+    res.json({
+      success: true,
+      data: results,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages,
+        totalCount,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+        limit: parseInt(limit)
+      },
+      filters: {
+        search,
+        voterType,
+        AC,
+        Part,
+        Booth,
+        Sex,
+        ageMin,
+        ageMax,
+        isPaid,
+        isVisited,
+        CardNo,
+        CodeNo,
+        nameOnly,
+        sortBy,
+        sortOrder
+      }
+    });
+  } catch (error) {
+    console.error('Search merged voters error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error searching voters',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getAllVotersCombined,
   getCombinedVotersStats,
   searchCombinedVoters,
-  streamAllVotersCombined
+  streamAllVotersCombined,
+  getMergedVoter,
+  updateMergedVoter,
+  updateMergedVoterStatus,
+  deleteMergedVoter,
+  searchMergedVoters
 };

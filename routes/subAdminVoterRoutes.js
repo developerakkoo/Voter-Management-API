@@ -9,9 +9,13 @@ const {
   updateAssignedVoterStatus,
   getAssignedVotersStats,
   searchAssignedVoters,
-  filterAssignedVoters
+  filterAssignedVoters,
+  getAssignedVotersMapData
 } = require('../controller/subAdminVoterController');
 // const { authenticateSubAdmin } = require('../middleware/subAdminAuth');
+
+// GET /api/subadmin/voters/map-data - Get assigned voters with surveys for map plotting
+router.get('/map-data', getAssignedVotersMapData);
 
 // GET /api/subadmin/voters/stats - Get statistics for assigned voters
 router.get('/stats', getAssignedVotersStats);
