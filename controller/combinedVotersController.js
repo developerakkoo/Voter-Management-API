@@ -156,7 +156,15 @@ const getAllVotersCombined = async (req, res) => {
         { 'Relative Name Eng': { $regex: search, $options: 'i' } },
         { 'Relative Name': { $regex: search, $options: 'i' } },
         { 'Address': { $regex: search, $options: 'i' } },
-        { 'Address Eng': { $regex: search, $options: 'i' } }
+        { 'Address Eng': { $regex: search, $options: 'i' } },
+        { 'CardNo': { $regex: search, $options: 'i' } },
+        { 'CodeNo': { $regex: search, $options: 'i' } },
+        { 'AC': { $regex: search, $options: 'i' } },
+        { 'Part': { $regex: search, $options: 'i' } },
+        { 'Booth': { $regex: search, $options: 'i' } },
+        { 'Booth Eng': { $regex: search, $options: 'i' } },
+        { 'House No': { $regex: search, $options: 'i' } },
+        { 'Sr No': { $regex: search, $options: 'i' } }
       ];
     }
     
@@ -473,9 +481,14 @@ const searchCombinedVoters = async (req, res) => {
         { 'Relative Name': regex },
         { 'Address': regex },
         { 'Address Eng': regex },
+        { 'CardNo': regex },
+        { 'CodeNo': regex },
         { 'AC': regex },
         { 'Part': regex },
-        { 'Booth': regex }
+        { 'Booth': regex },
+        { 'Booth Eng': regex },
+        { 'House No': regex },
+        { 'Sr No': regex }
       ]
     };
     
@@ -607,7 +620,15 @@ const streamAllVotersCombined = async (req, res) => {
         { 'Relative Name Eng': { $regex: search, $options: 'i' } },
         { 'Relative Name': { $regex: search, $options: 'i' } },
         { 'Address': { $regex: search, $options: 'i' } },
-        { 'Address Eng': { $regex: search, $options: 'i' } }
+        { 'Address Eng': { $regex: search, $options: 'i' } },
+        { 'CardNo': { $regex: search, $options: 'i' } },
+        { 'CodeNo': { $regex: search, $options: 'i' } },
+        { 'AC': { $regex: search, $options: 'i' } },
+        { 'Part': { $regex: search, $options: 'i' } },
+        { 'Booth': { $regex: search, $options: 'i' } },
+        { 'Booth Eng': { $regex: search, $options: 'i' } },
+        { 'House No': { $regex: search, $options: 'i' } },
+        { 'Sr No': { $regex: search, $options: 'i' } }
       ];
     }
     
