@@ -3,7 +3,7 @@ const Voter = require('../models/Voter');
 const VoterFour = require('../models/VoterFour');
 const User = require('../models/User');
 
-// GET /api/survey - Get all surveys with pagination, filtering, and search
+// GET /api/survey - Get all surveys with pagination, filtering, and advanced search
 const getAllSurveys = async (req, res) => {
   try {
     const {
@@ -18,7 +18,31 @@ const getAllSurveys = async (req, res) => {
       dateFrom,
       dateTo,
       sortBy = 'createdAt',
-      sortOrder = 'desc'
+      sortOrder = 'desc',
+      // Advanced search fields
+      voterName,
+      voterNameEng,
+      relativeName,
+      relativeNameEng,
+      cardNo,
+      pno,
+      codeNo,
+      ac,
+      part,
+      booth,
+      boothNo,
+      address,
+      addressEng,
+      age,
+      sex,
+      memberName,
+      memberPhoneNumber,
+      memberRelationship,
+      memberAge,
+      memberIsVoter,
+      surveyorName,
+      locationAccuracy,
+      qualityScore
     } = req.query;
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -26,6 +50,7 @@ const getAllSurveys = async (req, res) => {
     // Build filter criteria
     const filter = {};
     
+    // Basic filters
     if (status) filter.status = status;
     if (surveyorId) filter.surveyorId = surveyorId;
     if (voterType) filter.voterType = voterType;
@@ -39,15 +64,65 @@ const getAllSurveys = async (req, res) => {
       if (dateTo) filter.createdAt.$lte = new Date(dateTo);
     }
 
-    // Search functionality
+    // Location accuracy filter
+    if (locationAccuracy) {
+      filter['location.accuracy'] = { $lte: parseFloat(locationAccuracy) };
+    }
+
+    // Quality score filter
+    if (qualityScore) {
+      filter['quality.score'] = { $gte: parseFloat(qualityScore) };
+    }
+
+    // Advanced search functionality - build complex $or query
+    const searchConditions = [];
+    
+    // General search across multiple fields
     if (search) {
-      filter.$or = [
+      searchConditions.push(
         { voterPhoneNumber: { $regex: search, $options: 'i' } },
         { 'location.address': { $regex: search, $options: 'i' } },
         { notes: { $regex: search, $options: 'i' } },
         { 'members.name': { $regex: search, $options: 'i' } },
-        { 'members.phoneNumber': { $regex: search, $options: 'i' } }
-      ];
+        { 'members.phoneNumber': { $regex: search, $options: 'i' } },
+        { 'surveyData.name': { $regex: search, $options: 'i' } },
+        { 'surveyData.completeAddress': { $regex: search, $options: 'i' } },
+        { 'surveyData.voterDetails.voter_name': { $regex: search, $options: 'i' } },
+        { 'surveyData.voterDetails.voter_name_eng': { $regex: search, $options: 'i' } },
+        { 'surveyData.voterDetails.address': { $regex: search, $options: 'i' } },
+        { 'surveyData.voterDetails.booth': { $regex: search, $options: 'i' } }
+      );
+    }
+
+    // Specific field searches
+    if (voterName) searchConditions.push({ 'surveyData.voterDetails.voter_name': { $regex: voterName, $options: 'i' } });
+    if (voterNameEng) searchConditions.push({ 'surveyData.voterDetails.voter_name_eng': { $regex: voterNameEng, $options: 'i' } });
+    if (relativeName) searchConditions.push({ 'surveyData.voterDetails.relative_name': { $regex: relativeName, $options: 'i' } });
+    if (relativeNameEng) searchConditions.push({ 'surveyData.voterDetails.relative_name_eng': { $regex: relativeNameEng, $options: 'i' } });
+    if (cardNo) searchConditions.push({ 'surveyData.voterDetails.cardno': { $regex: cardNo, $options: 'i' } });
+    if (pno) searchConditions.push({ 'surveyData.voterDetails.pno': { $regex: pno, $options: 'i' } });
+    if (codeNo) searchConditions.push({ 'surveyData.voterDetails.codeNo': { $regex: codeNo, $options: 'i' } });
+    if (ac) searchConditions.push({ 'surveyData.voterDetails.ac': { $regex: ac, $options: 'i' } });
+    if (part) searchConditions.push({ 'surveyData.voterDetails.part': { $regex: part, $options: 'i' } });
+    if (booth) searchConditions.push({ 'surveyData.voterDetails.booth': { $regex: booth, $options: 'i' } });
+    if (boothNo) searchConditions.push({ 'surveyData.voterDetails.boothno': { $regex: boothNo, $options: 'i' } });
+    if (address) searchConditions.push({ 'surveyData.voterDetails.address': { $regex: address, $options: 'i' } });
+    if (addressEng) searchConditions.push({ 'surveyData.voterDetails.address_eng': { $regex: addressEng, $options: 'i' } });
+    if (age) searchConditions.push({ 'surveyData.voterDetails.age': parseInt(age) });
+    if (sex) searchConditions.push({ 'surveyData.voterDetails.sex': { $regex: sex, $options: 'i' } });
+    if (memberName) searchConditions.push({ 'members.name': { $regex: memberName, $options: 'i' } });
+    if (memberPhoneNumber) searchConditions.push({ 'members.phoneNumber': { $regex: memberPhoneNumber, $options: 'i' } });
+    if (memberRelationship) searchConditions.push({ 'members.relationship': { $regex: memberRelationship, $options: 'i' } });
+    if (memberAge) searchConditions.push({ 'members.age': parseInt(memberAge) });
+    if (memberIsVoter !== undefined) {
+      const isVoter = memberIsVoter === 'true' || memberIsVoter === true;
+      searchConditions.push({ 'members.isVoter': isVoter });
+    }
+    if (surveyorName) searchConditions.push({ 'surveyorId.fullName': { $regex: surveyorName, $options: 'i' } });
+
+    // Apply search conditions if any exist
+    if (searchConditions.length > 0) {
+      filter.$or = searchConditions;
     }
 
     // Sort options
@@ -95,6 +170,7 @@ const getAllSurveys = async (req, res) => {
         limit: parseInt(limit)
       },
       filters: {
+        // Basic filters
         status,
         surveyorId,
         voterType,
@@ -104,7 +180,31 @@ const getAllSurveys = async (req, res) => {
         dateFrom,
         dateTo,
         sortBy,
-        sortOrder
+        sortOrder,
+        // Advanced search filters
+        voterName,
+        voterNameEng,
+        relativeName,
+        relativeNameEng,
+        cardNo,
+        pno,
+        codeNo,
+        ac,
+        part,
+        booth,
+        boothNo,
+        address,
+        addressEng,
+        age,
+        sex,
+        memberName,
+        memberPhoneNumber,
+        memberRelationship,
+        memberAge,
+        memberIsVoter,
+        surveyorName,
+        locationAccuracy,
+        qualityScore
       }
     });
   } catch (error) {
@@ -556,6 +656,122 @@ const getSurveyStats = async (req, res) => {
       { $group: { _id: null, avgMembers: { $avg: '$memberCount' } } }
     ]);
 
+    // Member statistics - count voters vs non-voters
+    const memberStats = await Survey.aggregate([
+      { $unwind: '$members' },
+      {
+        $group: {
+          _id: null,
+          totalMembers: { $sum: 1 },
+          voterMembers: {
+            $sum: {
+              $cond: [
+                { $and: [
+                  { $eq: ['$members.isVoter', true] },
+                  { $ne: ['$members.voterId', null] }
+                ]},
+                1,
+                0
+              ]
+            }
+          },
+          nonVoterMembers: {
+            $sum: {
+              $cond: [
+                { $or: [
+                  { $eq: ['$members.isVoter', false] },
+                  { $eq: ['$members.voterId', null] }
+                ]},
+                1,
+                0
+              ]
+            }
+          }
+        }
+      }
+    ]);
+
+    // Additional member statistics by age groups
+    const memberAgeStats = await Survey.aggregate([
+      { $unwind: '$members' },
+      {
+        $bucket: {
+          groupBy: '$members.age',
+          boundaries: [0, 18, 30, 50, 65, 100],
+          default: 'Unknown',
+          output: {
+            count: { $sum: 1 },
+            voters: {
+              $sum: {
+                $cond: [
+                  { $and: [
+                    { $eq: ['$members.isVoter', true] },
+                    { $ne: ['$members.voterId', null] }
+                  ]},
+                  1,
+                  0
+                ]
+              }
+            },
+            nonVoters: {
+              $sum: {
+                $cond: [
+                  { $or: [
+                    { $eq: ['$members.isVoter', false] },
+                    { $eq: ['$members.voterId', null] }
+                  ]},
+                  1,
+                  0
+                ]
+              }
+            }
+          }
+        }
+      }
+    ]);
+
+    // Member relationship statistics
+    const memberRelationshipStats = await Survey.aggregate([
+      { $unwind: '$members' },
+      {
+        $group: {
+          _id: '$members.relationship',
+          count: { $sum: 1 },
+          voters: {
+            $sum: {
+              $cond: [
+                { $and: [
+                  { $eq: ['$members.isVoter', true] },
+                  { $ne: ['$members.voterId', null] }
+                ]},
+                1,
+                0
+              ]
+            }
+          },
+          nonVoters: {
+            $sum: {
+              $cond: [
+                { $or: [
+                  { $eq: ['$members.isVoter', false] },
+                  { $eq: ['$members.voterId', null] }
+                ]},
+                1,
+                0
+              ]
+            }
+          }
+        }
+      },
+      { $sort: { count: -1 } }
+    ]);
+
+    const memberStatsData = memberStats[0] || {
+      totalMembers: 0,
+      voterMembers: 0,
+      nonVoterMembers: 0
+    };
+
     res.json({
       success: true,
       data: {
@@ -574,7 +790,21 @@ const getSurveyStats = async (req, res) => {
         byVoterType: surveysByVoterType,
         topSurveyors: surveysBySurveyor,
         avgMembersPerSurvey: avgMembersPerSurvey[0]?.avgMembers || 0,
-        totalSurveys
+        totalSurveys,
+        // New member statistics
+        memberStatistics: {
+          totalMembers: memberStatsData.totalMembers,
+          voterMembers: memberStatsData.voterMembers,
+          nonVoterMembers: memberStatsData.nonVoterMembers,
+          voterPercentage: memberStatsData.totalMembers > 0 
+            ? Math.round((memberStatsData.voterMembers / memberStatsData.totalMembers) * 100) 
+            : 0,
+          nonVoterPercentage: memberStatsData.totalMembers > 0 
+            ? Math.round((memberStatsData.nonVoterMembers / memberStatsData.totalMembers) * 100) 
+            : 0
+        },
+        memberAgeGroups: memberAgeStats,
+        memberRelationships: memberRelationshipStats
       }
     });
   } catch (error) {
