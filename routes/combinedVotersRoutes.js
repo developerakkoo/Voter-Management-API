@@ -9,7 +9,10 @@ const {
   updateMergedVoter,
   updateMergedVoterStatus,
   deleteMergedVoter,
-  searchMergedVoters
+  searchMergedVoters,
+  exportAllVoters,
+  downloadVotersExcel,
+  streamVotersExport
 } = require('../controller/combinedVotersController');
 
 // GET /api/voters/all - Get all voters from both Voter and VoterFour collections
@@ -38,5 +41,14 @@ router.patch('/merged/:voterId/:voterType/status', updateMergedVoterStatus);
 
 // DELETE /api/voters/merged/:voterId/:voterType - Delete a voter from either collection
 router.delete('/merged/:voterId/:voterType', deleteMergedVoter);
+
+// GET /api/voters/export - Export all voters to Excel
+router.get('/export', exportAllVoters);
+
+// GET /api/voters/export/download/:filename - Download Excel file
+router.get('/export/download/:filename', downloadVotersExcel);
+
+// GET /api/voters/export/stream - Stream voters export for large datasets
+router.get('/export/stream', streamVotersExport);
 
 module.exports = router;

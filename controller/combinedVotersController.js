@@ -1,5 +1,6 @@
 const Voter = require('../models/Voter');
 const VoterFour = require('../models/VoterFour');
+const XLSX = require('xlsx');
 
 // Helper function to calculate complete analytics using database aggregation
 const calculateCompleteAnalytics = async (filter, voterType) => {
@@ -1095,6 +1096,197 @@ const searchMergedVoters = async (req, res) => {
   }
 };
 
+// GET /api/voters/export - Export all voters to Excel
+const exportAllVoters = async (req, res) => {
+  try {
+    const {
+      voterType = 'all', // 'all', 'voter', 'voterFour'
+      includeStats = 'true',
+      format = 'combined' // 'combined', 'separate', 'formatted'
+    } = req.query;
+
+    const ExcelWriter = require('../utils/excelWriter');
+    const writer = new ExcelWriter();
+
+    let votersData = [];
+    let voterFourData = [];
+    let summary = null;
+
+    // Fetch voters based on type
+    if (voterType === 'all' || voterType === 'voter') {
+      votersData = await Voter.find({})
+        .sort({ 'Voter Name Eng': 1 })
+        .lean();
+    }
+
+    if (voterType === 'all' || voterType === 'voterFour') {
+      voterFourData = await VoterFour.find({})
+        .sort({ 'Voter Name Eng': 1 })
+        .lean();
+    }
+
+    // Get statistics if requested
+    if (includeStats === 'true') {
+      summary = await calculateCompleteAnalytics({}, voterType);
+    }
+
+    // Prepare data for export
+    const exportData = {
+      voters: votersData,
+      voterFour: voterFourData,
+      summary: summary
+    };
+
+    let excelResult;
+
+    // Create Excel file based on format
+    switch (format) {
+      case 'separate':
+        if (voterType === 'all') {
+          excelResult = writer.createMultiSheetExcel(exportData, 'voters_export');
+        } else {
+          const data = voterType === 'voter' ? votersData : voterFourData;
+          excelResult = writer.createVotersExcel(data, `${voterType}_export`);
+        }
+        break;
+      case 'formatted':
+        const allVoters = [...votersData, ...voterFourData];
+        excelResult = writer.createFormattedExcel(allVoters, 'voters_export');
+        break;
+      case 'combined':
+      default:
+        const combinedVoters = [...votersData, ...voterFourData];
+        excelResult = writer.createVotersExcel(combinedVoters, 'voters_export');
+        break;
+    }
+
+    // Write Excel to buffer
+    const buffer = XLSX.write(excelResult.workbook, { type: 'buffer', bookType: 'xlsx' });
+    
+    // Set response headers for Excel download
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${excelResult.filename}"`);
+    res.setHeader('Content-Length', buffer.length);
+
+    // Send Excel file as buffer
+    res.send(buffer);
+
+  } catch (error) {
+    console.error('Export voters error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error exporting voters',
+      error: error.message
+    });
+  }
+};
+
+// GET /api/voters/export/download/:filename - Download Excel file
+const downloadVotersExcel = async (req, res) => {
+  try {
+    const { filename } = req.params;
+    
+    // This endpoint would typically serve files from a storage location
+    // For now, we'll return a message indicating the file should be downloaded
+    // from the export endpoint
+    
+    res.json({
+      success: false,
+      message: 'Please use the /api/voters/export endpoint to download the Excel file',
+      error: 'Direct file download not implemented. Use export endpoint instead.'
+    });
+
+  } catch (error) {
+    console.error('Download Excel error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error downloading Excel file',
+      error: error.message
+    });
+  }
+};
+
+// GET /api/voters/export/stream - Stream voters export for large datasets
+const streamVotersExport = async (req, res) => {
+  try {
+    const {
+      voterType = 'all',
+      batchSize = 1000,
+      format = 'combined'
+    } = req.query;
+
+    const ExcelWriter = require('../utils/excelWriter');
+    
+    // Set response headers for streaming
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="voters_stream_export_${Date.now()}.xlsx"`);
+    res.setHeader('Transfer-Encoding', 'chunked');
+
+    const writer = new ExcelWriter();
+    let totalProcessed = 0;
+    let allVoters = [];
+
+    // Process voters in batches
+    if (voterType === 'all' || voterType === 'voter') {
+      const voterCount = await Voter.countDocuments();
+      const totalBatches = Math.ceil(voterCount / batchSize);
+      
+      for (let i = 0; i < totalBatches; i++) {
+        const skip = i * batchSize;
+        const voters = await Voter.find({})
+          .skip(skip)
+          .limit(parseInt(batchSize))
+          .sort({ 'Voter Name Eng': 1 })
+          .lean();
+        
+        allVoters.push(...voters);
+        totalProcessed += voters.length;
+        
+        // Send progress update
+        if (i % 10 === 0) {
+          console.log(`Processed ${totalProcessed} voters...`);
+        }
+      }
+    }
+
+    if (voterType === 'all' || voterType === 'voterFour') {
+      const voterFourCount = await VoterFour.countDocuments();
+      const totalBatches = Math.ceil(voterFourCount / batchSize);
+      
+      for (let i = 0; i < totalBatches; i++) {
+        const skip = i * batchSize;
+        const voters = await VoterFour.find({})
+          .skip(skip)
+          .limit(parseInt(batchSize))
+          .sort({ 'Voter Name Eng': 1 })
+          .lean();
+        
+        allVoters.push(...voters);
+        totalProcessed += voters.length;
+        
+        console.log(`Processed ${totalProcessed} total voters...`);
+      }
+    }
+
+    // Create Excel file
+    const excelResult = writer.createVotersExcel(allVoters, 'voters_stream_export');
+    
+    // Write to buffer and send
+    const buffer = XLSX.write(excelResult.workbook, { type: 'buffer', bookType: 'xlsx' });
+    res.send(buffer);
+
+    console.log(`Export completed. Total records: ${totalProcessed}`);
+
+  } catch (error) {
+    console.error('Stream export error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error streaming voters export',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getAllVotersCombined,
   getCombinedVotersStats,
@@ -1104,5 +1296,8 @@ module.exports = {
   updateMergedVoter,
   updateMergedVoterStatus,
   deleteMergedVoter,
-  searchMergedVoters
+  searchMergedVoters,
+  exportAllVoters,
+  downloadVotersExcel,
+  streamVotersExport
 };
