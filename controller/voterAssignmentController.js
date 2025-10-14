@@ -91,6 +91,8 @@ const assignVotersToSubAdmin = async (req, res) => {
       createdAssignments = await VoterAssignment.insertMany(newAssignments);
     }
     
+    const allAssignments = [...createdAssignments, ...updatedAssignments];
+    
     // Handle already assigned voters - assign remaining voters instead of failing
     if (assignmentsToReactivate.length > 0) {
       const alreadyAssignedVoterIds = assignmentsToReactivate.map(a => a.voterId);
@@ -113,8 +115,6 @@ const assignVotersToSubAdmin = async (req, res) => {
         }
       });
     }
-    
-    const allAssignments = [...createdAssignments, ...updatedAssignments];
     
     res.status(201).json({
       success: true,
