@@ -91,17 +91,25 @@ const assignVotersToSubAdmin = async (req, res) => {
       createdAssignments = await VoterAssignment.insertMany(newAssignments);
     }
     
-    // Check if any voters are already actively assigned
+    // Handle already assigned voters - assign remaining voters instead of failing
     if (assignmentsToReactivate.length > 0) {
       const alreadyAssignedVoterIds = assignmentsToReactivate.map(a => a.voterId);
-      return res.status(409).json({
-        success: false,
-        message: 'Some voters are already actively assigned to this sub admin',
-        alreadyAssigned: alreadyAssignedVoterIds,
-        details: 'These voters are currently assigned. Please unassign them first if you want to reassign.',
-        partialSuccess: {
-          created: createdAssignments.length,
-          updated: updatedAssignments.length
+      
+      // Return success with partial assignment info
+      return res.status(200).json({
+        success: true,
+        message: `Successfully assigned ${allAssignments.length} voters. ${alreadyAssignedVoterIds.length} voters were already assigned.`,
+        data: {
+          subAdminId,
+          assignedCount: allAssignments.length,
+          assignments: allAssignments,
+          summary: {
+            newlyAssigned: createdAssignments.length,
+            reactivated: updatedAssignments.length,
+            alreadyAssigned: alreadyAssignedVoterIds.length
+          },
+          alreadyAssigned: alreadyAssignedVoterIds,
+          details: 'Some voters were already assigned and were skipped. Only new assignments were processed.'
         }
       });
     }
@@ -1061,9 +1069,18 @@ const assignSelectedVoters = async (req, res) => {
       createdAssignments = await VoterAssignment.insertMany(newAssignments);
     }
     
+    // Determine response message based on results
+    let message = `Successfully assigned ${createdAssignments.length} voters to sub admin`;
+    if (alreadyAssignedIds.length > 0) {
+      message += `. ${alreadyAssignedIds.length} voters were already assigned and skipped`;
+    }
+    if (notFoundIds.length > 0) {
+      message += `. ${notFoundIds.length} voters were not found in database`;
+    }
+
     res.status(201).json({
       success: true,
-      message: `Successfully assigned ${createdAssignments.length} voters to sub admin`,
+      message: message,
       data: {
         subAdminId,
         subAdminName: subAdmin.fullName,
@@ -1074,12 +1091,16 @@ const assignSelectedVoters = async (req, res) => {
         alreadyAssigned: alreadyAssignedIds.length,
         newlyAssigned: createdAssignments.length,
         notFoundIds: notFoundIds.length > 0 ? notFoundIds.slice(0, 10) : [],
+        alreadyAssignedIds: alreadyAssignedIds.length > 0 ? alreadyAssignedIds.slice(0, 10) : [],
         summary: {
           total: voterIds.length,
           successful: createdAssignments.length,
           skipped: alreadyAssignedIds.length,
           notFound: notFoundIds.length
-        }
+        },
+        details: alreadyAssignedIds.length > 0 || notFoundIds.length > 0 
+          ? 'Some voters were skipped due to existing assignments or not being found in database'
+          : 'All voters were successfully assigned'
       }
     });
     
