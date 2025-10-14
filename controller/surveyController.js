@@ -1284,10 +1284,15 @@ const getSurveyMapData = async (req, res) => {
         }
       }
       
-      // Get voter identifier (CardNo, pno, or CodeNo)
+      // Get voter identifier (CardNo or CodeNo, not pno)
       let voterIdentifier = '';
       if (voter) {
-        voterIdentifier = voter.CardNo || voter.pno || voter.CodeNo || '';
+        // Prioritize CardNo for Voter type, CodeNo for VoterFour type
+        if (survey.voterType === 'Voter') {
+          voterIdentifier = voter.CardNo || '';
+        } else if (survey.voterType === 'VoterFour') {
+          voterIdentifier = voter.CardNo || voter.CodeNo || '';
+        }
       }
 
       // Get voter name
