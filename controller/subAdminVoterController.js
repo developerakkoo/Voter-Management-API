@@ -1171,11 +1171,18 @@ const getAssignedVotersSurveys = async (req, res) => {
       }
     }
     
-    // Sort by voter name in ascending order
+    // Sort by voter name in ascending order (ignore special characters at the beginning)
     surveysWithVoterData.sort((a, b) => {
-      const nameA = (a.voterName || '').toLowerCase();
-      const nameB = (b.voterName || '').toLowerCase();
-      return nameA.localeCompare(nameB);
+      // Function to clean name by removing special characters from the beginning
+      const cleanName = (name) => {
+        if (!name) return '';
+        // Remove special characters, symbols, spaces, underscores, hyphens, and Unicode symbols from the beginning
+        return name.replace(/^[\s\W_\-]+/, '').toLowerCase();
+      };
+      
+      const cleanNameA = cleanName(a.voterName);
+      const cleanNameB = cleanName(b.voterName);
+      return cleanNameA.localeCompare(cleanNameB);
     });
     
     // Apply pagination after sorting
