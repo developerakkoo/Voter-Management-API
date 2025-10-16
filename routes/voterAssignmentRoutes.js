@@ -6,6 +6,7 @@ const {
   getVotersWithAssignmentStatus,
   getAllAssignments,
   unassignVotersFromSubAdmin,
+  unassignAllVotersFromSubAdmin,
   getSubAdminAssignments,
   getVoterAssignments,
   getAssignmentStats,
@@ -78,6 +79,9 @@ router.post('/bulk-update-status-from-excel', upload.single('file'), bulkUpdateS
 
 // DELETE /api/assignment/unassign - Unassign voters from sub admin (Admin only)
 router.delete('/unassign', unassignVotersFromSubAdmin);
+
+// DELETE /api/assignment/unassign-all/:subAdminId - Unassign ALL voters from sub admin (Admin only)
+router.delete('/unassign-all/:subAdminId', unassignAllVotersFromSubAdmin);
 
 // GET /api/assignment/subadmin/:id - Get all assignments for a sub admin (Admin only)
 router.get('/subadmin/:id', getSubAdminAssignments);

@@ -23,6 +23,10 @@ const voterAssignmentSchema = new mongoose.Schema({
     default: Date.now,
     index: true
   },
+  unassignedAt: {
+    type: Date,
+    index: true
+  },
   isActive: {
     type: Boolean,
     default: true,

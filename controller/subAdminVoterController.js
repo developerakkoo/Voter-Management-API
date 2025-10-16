@@ -1105,25 +1105,19 @@ const getAssignedVotersSurveys = async (req, res) => {
     const limitNum = parseInt(limit);
     const skip = (pageNum - 1) * limitNum;
     
-    // Sort options
-    const sortOptions = {};
-    sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
+    // Always sort by voter name in ascending order (ignore sortBy parameter)
+    // First get all surveys without pagination to sort by voter name
+    const allSurveys = await Survey.find(surveyFilter)
+      .select('voterId voterType voterPhoneNumber location status completedAt createdAt members')
+      .lean();
     
-    // Fetch surveys with pagination
-    const [surveys, totalCount] = await Promise.all([
-      Survey.find(surveyFilter)
-        .select('voterId voterType voterPhoneNumber location status completedAt createdAt members')
-        .sort(sortOptions)
-        .skip(skip)
-        .limit(limitNum)
-        .lean(),
-      Survey.countDocuments(surveyFilter)
-    ]);
+    // Get total count
+    const totalCount = allSurveys.length;
     
     // Fetch voter data for each survey
     const surveysWithVoterData = [];
     
-    for (const survey of surveys) {
+    for (const survey of allSurveys) {
       if (!survey.voterId || !survey.voterType) continue;
       
       const VoterModel = survey.voterType === 'Voter' ? Voter : VoterFour;
@@ -1177,11 +1171,21 @@ const getAssignedVotersSurveys = async (req, res) => {
       }
     }
     
+    // Sort by voter name in ascending order
+    surveysWithVoterData.sort((a, b) => {
+      const nameA = (a.voterName || '').toLowerCase();
+      const nameB = (b.voterName || '').toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
+    
+    // Apply pagination after sorting
+    const paginatedData = surveysWithVoterData.slice(skip, skip + limitNum);
+    
     const totalPages = Math.ceil(totalCount / limitNum);
     
     res.json({
       success: true,
-      data: surveysWithVoterData,
+      data: paginatedData,
       pagination: {
         currentPage: pageNum,
         totalPages,
@@ -1198,8 +1202,8 @@ const getAssignedVotersSurveys = async (req, res) => {
           status: status || 'all',
           dateFrom: dateFrom || null,
           dateTo: dateTo || null,
-          sortBy,
-          sortOrder
+          sortBy: 'voterName',
+          sortOrder: 'asc'
         }
       }
     });

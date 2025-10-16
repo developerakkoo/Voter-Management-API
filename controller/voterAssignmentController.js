@@ -402,6 +402,69 @@ const unassignVotersFromSubAdmin = async (req, res) => {
   }
 };
 
+// DELETE /api/assignment/unassign-all/:subAdminId - Unassign ALL voters from sub admin (Admin only)
+const unassignAllVotersFromSubAdmin = async (req, res) => {
+  try {
+    const { subAdminId } = req.params;
+    
+    // Validate required fields
+    if (!subAdminId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Sub admin ID is required'
+      });
+    }
+    
+    // Check if sub admin exists
+    const subAdmin = await SubAdmin.findById(subAdminId);
+    if (!subAdmin) {
+      return res.status(404).json({
+        success: false,
+        message: 'Sub admin not found'
+      });
+    }
+    
+    // Get current assignment counts before unassigning
+    const [totalAssignments, voterAssignments, voterFourAssignments] = await Promise.all([
+      VoterAssignment.countDocuments({ subAdminId, isActive: true }),
+      VoterAssignment.countDocuments({ subAdminId, voterType: 'Voter', isActive: true }),
+      VoterAssignment.countDocuments({ subAdminId, voterType: 'VoterFour', isActive: true })
+    ]);
+    
+    // Deactivate ALL assignments for this sub admin
+    const result = await VoterAssignment.updateMany(
+      { subAdminId, isActive: true },
+      { 
+        isActive: false,
+        unassignedAt: new Date() // Track when unassigned
+      }
+    );
+    
+    res.json({
+      success: true,
+      message: `Successfully unassigned all ${result.modifiedCount} voters from sub admin`,
+      data: {
+        subAdminId,
+        subAdminName: subAdmin.fullName,
+        unassignedCount: result.modifiedCount,
+        previousStats: {
+          totalAssignments,
+          voterAssignments,
+          voterFourAssignments
+        },
+        message: 'All voters are now available for reassignment to other sub-admins'
+      }
+    });
+  } catch (error) {
+    console.error('Unassign all voters error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error unassigning all voters',
+      error: error.message
+    });
+  }
+};
+
 // GET /api/assignment/subadmin/:id - Get all assignments for a sub admin (Admin only)
 const getSubAdminAssignments = async (req, res) => {
   try {
@@ -1586,6 +1649,7 @@ module.exports = {
   getVotersWithAssignmentStatus,
   getAllAssignments,
   unassignVotersFromSubAdmin,
+  unassignAllVotersFromSubAdmin,
   getSubAdminAssignments,
   getVoterAssignments,
   getAssignmentStats,
